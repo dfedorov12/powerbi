@@ -1,0 +1,248 @@
+"use strict";
+
+/* Endpunkte des Brokers – vollständig durchgespielt, ohne Azure, ohne Netz
+   und ohne Mandanten.
+
+   Aufbau: `@azure/functions` wird durch eine Attrappe ersetzt, die die
+   registrierten Handler nur einsammelt. `fetch` beantwortet die Aufrufe an
+   Entra und Power BI. Damit lässt sich genau das prüfen, worauf es
+   sicherheitsseitig ankommt:
+     - ohne gültigen Ausweis gibt es kein Token
+     - IDs kommen ausschließlich aus der Freigabeliste, nie vom Aufrufer
+     - ausgestellt wird ausschließlich accessLevel "View"                    */
+
+const test = require("node:test");
+const assert = require("node:assert");
+const crypto = require("node:crypto");
+const Module = require("node:module");
+
+/* ── Schlüssel und Token wie in entra.test.js ────────────────────────── */
+
+const TENANT   = "11111111-2222-3333-4444-555555555555";
+const FRONTEND = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const KID = "testschluessel";
+const WS  = "ws-1111";
+const RID = "rep-2222";
+
+const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+const jwk = { ...publicKey.export({ format: "jwk" }), kid: KID, alg: "RS256", use: "sig" };
+const b64u = o => Buffer.from(JSON.stringify(o)).toString("base64url");
+
+function token(ueber = {}) {
+  const jetzt = Math.floor(Date.now() / 1000);
+  const nutz = {
+    iss: `https://login.microsoftonline.com/${TENANT}/v2.0`,
+    aud: FRONTEND, tid: TENANT,
+    exp: jetzt + 3600, nbf: jetzt - 60,
+    scp: "Berichte.Lesen",
+    upn: "denis@dihag.com", name: "Denis Fedorov",
+    ...ueber
+  };
+  const daten = `${b64u({ alg: "RS256", kid: KID, typ: "JWT" })}.${b64u(nutz)}`;
+  const s = crypto.createSign("RSA-SHA256");
+  s.update(daten); s.end();
+  return `${daten}.${s.sign(privateKey).toString("base64url")}`;
+}
+
+/* ── Umgebung ────────────────────────────────────────────────────────── */
+
+process.env.PBI_TENANT_ID      = TENANT;
+process.env.PBI_CLIENT_ID      = "dienst-app-id";
+process.env.PBI_CLIENT_SECRET  = "streng-geheim";
+process.env.FRONTEND_CLIENT_ID = FRONTEND;
+process.env.FRONTEND_SCOPE     = "Berichte.Lesen";
+process.env.PBI_BERICHTE       = JSON.stringify([
+  { key: "bericht1", workspaceId: WS, reportId: RID }
+]);
+process.env.ALLOWED_ORIGINS   = "https://dfedorov12.github.io";
+process.env.ERLAUBTE_DOMAENEN = "dihag.com";
+process.env.ADMIN_UPNS        = "administrator@dihag.com";
+
+/* ── Antworten von Entra und Power BI ────────────────────────────────── */
+
+let pbiFehler = null;          // setzt einzelne Tests auf eine Fehlermeldung
+const aufrufe = [];            // Protokoll: was ging an Power BI?
+
+const antwort = (koerper, ok = true, status = 200) => {
+  const text = typeof koerper === "string" ? koerper : JSON.stringify(koerper);
+  return { ok, status, statusText: ok ? "OK" : "Fehler",
+           json: async () => JSON.parse(text), text: async () => text };
+};
+
+global.fetch = async (url, opts = {}) => {
+  const s = String(url);
+
+  if (s.includes("openid-configuration"))
+    return antwort({ jwks_uri: "https://example.test/keys" });
+  if (s.includes("example.test/keys"))
+    return antwort({ keys: [jwk] });
+  if (s.includes("/oauth2/v2.0/token"))
+    return antwort({ access_token: "dienstuser-token", expires_in: 3600 });
+
+  if (s.includes("api.powerbi.com")) {
+    aufrufe.push({ url: s, method: opts.method || "GET", body: opts.body });
+    if (pbiFehler)
+      return antwort({ error: { message: pbiFehler } }, false, 403);
+
+    if (s.endsWith("/GenerateToken"))
+      return antwort({ token: "einbettungs-token",
+                       expiration: new Date(Date.now() + 3600000).toISOString() });
+    if (/\/reports\/[^/]+$/.test(s))
+      return antwort({ id: RID, name: "Kennzahlen",
+                       embedUrl: "https://app.powerbi.com/reportEmbed?reportId=" + RID,
+                       datasetId: "ds-3333" });
+    if (s.endsWith("/reports"))
+      return antwort({ value: [{ id: RID, name: "Kennzahlen" },
+                               { id: "rep-4444", name: "Nicht freigegeben" }] });
+    if (s.endsWith("/groups"))
+      return antwort({ value: [{ id: WS, name: "Controlling" }] });
+  }
+  throw new Error("unerwarteter Abruf: " + s);
+};
+
+/* ── Handler einsammeln ──────────────────────────────────────────────── */
+
+const registriert = new Map();
+const echtesLaden = Module._load;
+Module._load = function (anfrage, ...rest) {
+  if (anfrage === "@azure/functions") {
+    return { app: { http: (name, opt) => registriert.set(opt.route || name, opt) } };
+  }
+  return echtesLaden.call(this, anfrage, ...rest);
+};
+require("../src/functions/api");
+Module._load = echtesLaden;
+
+const kontext = { log: () => {}, warn: () => {}, error: () => {} };
+
+function ruf(route, { method = "GET", ausweis = null,
+                      herkunft = "https://dfedorov12.github.io", query = {} } = {}) {
+  const kopf = new Headers();
+  if (ausweis) kopf.set("authorization", "Bearer " + ausweis);
+  if (herkunft) kopf.set("origin", herkunft);
+  const request = { method, headers: kopf, query: new URLSearchParams(query) };
+  return registriert.get(route).handler(request, kontext);
+}
+
+test.beforeEach(() => { pbiFehler = null; aufrufe.length = 0; });
+
+/* ── health ──────────────────────────────────────────────────────────── */
+
+test("health antwortet ohne Anmeldung und meldet die Einrichtung", async () => {
+  const r = await ruf("health");
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.jsonBody.eingerichtet, true);
+  assert.deepStrictEqual(r.jsonBody.berichte, ["bericht1"]);
+});
+
+test("health verrät keine Geheimnisse", async () => {
+  const r = await ruf("health");
+  assert.ok(!JSON.stringify(r.jsonBody).includes("streng-geheim"));
+});
+
+/* ── CORS ────────────────────────────────────────────────────────────── */
+
+test("Vorabfrage der erlaubten Herkunft wird beantwortet", async () => {
+  const r = await ruf("embed-token", { method: "OPTIONS" });
+  assert.strictEqual(r.status, 204);
+  assert.strictEqual(r.headers["Access-Control-Allow-Origin"],
+    "https://dfedorov12.github.io");
+  assert.ok(r.headers["Access-Control-Allow-Headers"].includes("authorization"));
+});
+
+test("fremde Herkunft bekommt keine CORS-Freigabe", async () => {
+  const r = await ruf("embed-token", { method: "OPTIONS", herkunft: "https://boese.example" });
+  assert.strictEqual(r.headers["Access-Control-Allow-Origin"], undefined);
+});
+
+/* ── embed-token ─────────────────────────────────────────────────────── */
+
+test("ohne Ausweis gibt es kein Einbettungs-Token", async () => {
+  const r = await ruf("embed-token", { query: { bericht: "bericht1" } });
+  assert.strictEqual(r.status, 401);
+  assert.strictEqual(aufrufe.length, 0, "Power BI darf gar nicht erst gefragt werden");
+});
+
+test("Ausweis für einen anderen Dienst wird abgewiesen", async () => {
+  const r = await ruf("embed-token", {
+    ausweis: token({ aud: "00000009-0000-0000-c000-000000000000" }),
+    query: { bericht: "bericht1" }
+  });
+  assert.strictEqual(r.status, 401);
+});
+
+test("gültiger Ausweis bekommt ein Einbettungs-Token", async () => {
+  const r = await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.jsonBody.token, "einbettungs-token");
+  assert.strictEqual(r.jsonBody.reportId, RID);
+  assert.ok(r.jsonBody.embedUrl.startsWith("https://app.powerbi.com/"));
+  assert.ok(r.jsonBody.expiration);
+});
+
+test("ausgestellt wird ausschließlich accessLevel View", async () => {
+  await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
+  const gen = aufrufe.find(a => a.url.endsWith("/GenerateToken"));
+  assert.ok(gen, "GenerateToken wurde nicht aufgerufen");
+  assert.deepStrictEqual(JSON.parse(gen.body), { accessLevel: "View" });
+});
+
+test("die Antwort enthält nicht das Token des Dienstusers", async () => {
+  const r = await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
+  assert.ok(!JSON.stringify(r.jsonBody).includes("dienstuser-token"));
+});
+
+test("unbekannter Schlüssel wird abgewiesen", async () => {
+  const r = await ruf("embed-token", { ausweis: token(), query: { bericht: "geheim" } });
+  assert.strictEqual(r.status, 404);
+  assert.strictEqual(r.jsonBody.art, "unbekannter_bericht");
+  assert.strictEqual(aufrufe.length, 0);
+});
+
+test("untergeschobene IDs im Aufruf ändern nichts", async () => {
+  // Der Kern der Absicherung: Arbeitsbereich und Bericht kommen aus der
+  // Freigabeliste, niemals aus der Anfrage.
+  const r = await ruf("embed-token", {
+    ausweis: token(),
+    query: { bericht: "bericht1", workspaceId: "fremd-ws", reportId: "fremd-rep" }
+  });
+  assert.strictEqual(r.status, 200);
+  assert.ok(aufrufe.every(a => a.url.includes(WS) && a.url.includes(RID)),
+    "es wurde ein fremder Bericht abgefragt: " + JSON.stringify(aufrufe));
+});
+
+test("fremde E-Mail-Domäne wird abgewiesen", async () => {
+  const r = await ruf("embed-token", {
+    ausweis: token({ upn: "jemand@fremd.example" }),
+    query: { bericht: "bericht1" }
+  });
+  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.jsonBody.art, "domaene");
+  assert.strictEqual(aufrufe.length, 0);
+});
+
+test("Fehler von Power BI kommen als 502 mit Klartext zurück", async () => {
+  pbiFehler = "PowerBINotAuthorizedException";
+  const r = await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
+  assert.strictEqual(r.status, 502);
+  assert.match(r.jsonBody.fehler, /PowerBINotAuthorized/);
+  assert.strictEqual(r.jsonBody.art, "powerbi");
+});
+
+/* ── berichte ────────────────────────────────────────────────────────── */
+
+test("die Übersicht ist Administratoren vorbehalten", async () => {
+  const r = await ruf("berichte", { ausweis: token() });
+  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.jsonBody.art, "kein_admin");
+});
+
+test("Administratoren sehen alle Berichte mit Freigabe-Schlüssel", async () => {
+  const r = await ruf("berichte", { ausweis: token({ upn: "administrator@dihag.com" }) });
+  assert.strictEqual(r.status, 200);
+  const l = r.jsonBody.berichte;
+  assert.strictEqual(l.length, 2);
+  assert.strictEqual(l.find(b => b.reportId === RID).key, "bericht1");
+  assert.strictEqual(l.find(b => b.reportId === "rep-4444").key, "",
+    "nicht freigegebene Berichte duerfen keinen Schluessel tragen");
+});

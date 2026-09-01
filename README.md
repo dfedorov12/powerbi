@@ -84,12 +84,18 @@ Am Ende gibt es alle Werte für `js/config.js` und die Function App aus.
 
 ### 3. Broker
 
-Function App anlegen (Node 20, Linux, Verbrauchsplan reicht), die
-Umgebungsvariablen aus [broker/README.md](broker/README.md) setzen, dann
-Veröffentlichungsprofil als Repository-Geheimnis
-`AZURE_FUNCTIONAPP_PUBLISH_PROFILE` hinterlegen – der Workflow
-[deploy-broker.yml](.github/workflows/deploy-broker.yml) veröffentlicht bei jedem
-Push auf `main`, der `broker/` berührt.
+```powershell
+az login
+cd broker
+./setup-broker.ps1 -DienstClientId "..." -FrontendClientId "..." -WorkspaceId "..." -ReportId "..." -DienstSecret (Read-Host -AsSecureString "Geheimnis") -GithubGeheimnis
+```
+
+Das legt Ressourcengruppe, Speicherkonto und Function App (Node 20, Linux,
+Verbrauchsplan) an, trägt alle Einstellungen ein, leert die Plattform-CORS-Liste
+und hinterlegt das Veröffentlichungsprofil als Repository-Geheimnis
+`AZURE_FUNCTIONAPP_PUBLISH_PROFILE`. Danach veröffentlicht der Workflow
+[deploy-broker.yml](.github/workflows/deploy-broker.yml) bei jedem Push auf
+`main`, der `broker/` berührt. Einzelheiten: [broker/README.md](broker/README.md).
 
 Prüfen: `https://<function-app>.azurewebsites.net/api/health` muss
 `"eingerichtet": true` melden.
@@ -172,9 +178,12 @@ node tests/test-sichtbarkeit.mjs
 node --test broker/test
 ```
 
-Der zweite Lauf prüft die Ausweiskontrolle des Brokers gegen selbst erzeugte
-Schlüssel: fremde Zielgruppe, fremder Mandant, abgelaufen, fehlender Bereich,
-fremd signiert, nachträglich verändert, `alg: none`. Kein Netz, kein Mandant nötig.
+8 Tests zur Sichtbarkeit, 26 zum Broker – ohne Netz, ohne Azure, ohne Mandanten.
+Der Broker-Lauf spielt die Endpunkte vollständig durch (`@azure/functions` und
+`fetch` als Attrappen) und prüft die Ausweiskontrolle gegen selbst erzeugte
+Schlüssel. Die wichtigsten Fälle: ohne Ausweis kein Token, fremde Zielgruppe
+und fremder Mandant abgewiesen, untergeschobene IDs im Aufruf ändern nichts,
+ausgestellt wird ausschließlich `accessLevel: View`.
 
 ---
 

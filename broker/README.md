@@ -52,6 +52,31 @@ Identität ersetzen; Microsoft empfiehlt das für den Dauerbetrieb.
 
 ---
 
+## In Azure aufbauen
+
+`setup-broker.ps1` legt Ressourcengruppe, Speicherkonto und Function App an,
+trägt alle Einstellungen ein und **leert die Plattform-CORS-Liste**:
+
+```powershell
+az login
+./setup-broker.ps1 -DienstClientId "..." -FrontendClientId "..." -WorkspaceId "..." -ReportId "..." -DienstSecret (Read-Host -AsSecureString "Geheimnis") -GithubGeheimnis
+```
+
+Das Geheimnis wird nur als `SecureString` entgegengenommen, nie ausgegeben und
+nirgends in eine Datei geschrieben. `-GithubGeheimnis` holt zusätzlich das
+Veröffentlichungsprofil und hinterlegt es als Repository-Geheimnis
+`AZURE_FUNCTIONAPP_PUBLISH_PROFILE` – danach veröffentlicht jeder Push auf
+`main`, der `broker/` berührt, über
+[deploy-broker.yml](../.github/workflows/deploy-broker.yml).
+
+Voraussetzung ist die Azure CLI (`winget install Microsoft.AzureCLI`). Wer die
+Ressourcen lieber im Portal anlegt: Function App mit **Node 20, Linux,
+Verbrauchsplan**, dann die Einstellungen aus der Tabelle oben eintragen.
+
+Kosten: Der Verbrauchsplan enthält eine Million Aufrufe im Monat kostenfrei.
+Der Broker wird beim Öffnen eines Berichts und danach einmal je Stunde und
+offenem Dashboard aufgerufen – das bleibt im Freikontingent.
+
 ## Örtlich starten
 
 ```bash
@@ -64,18 +89,21 @@ Voraussetzung sind die *Azure Functions Core Tools* (`npm i -g azure-functions-c
 Der Broker läuft dann auf `http://localhost:7071/api/…`; in `js/config.js`
 zeigt `brokerUrl` für den örtlichen Test auf diese Adresse.
 
-## Bereitstellen
-
-Über den Workflow [.github/workflows/deploy-broker.yml](../.github/workflows/deploy-broker.yml):
-Veröffentlichungsprofil der Function App als Repository-Geheimnis
-`AZURE_FUNCTIONAPP_PUBLISH_PROFILE` hinterlegen, `APP_NAME` im Workflow
-anpassen – jeder Push auf `main`, der `broker/` berührt, veröffentlicht dann.
-
 ## Tests
 
 ```bash
 npm test
 ```
 
-Prüft die Freigabelogik und die Token-Prüfung gegen selbst erzeugte Schlüssel
-(kein Netz, kein Mandant nötig).
+26 Tests, ohne Netz, ohne Azure, ohne Mandanten:
+
+- **Endpunkte** (`test/api.test.js`): `@azure/functions` und `fetch` sind
+  Attrappen, die Handler laufen echt. Geprüft werden unter anderem: ohne
+  Ausweis kein Token, fremde Zielgruppe abgewiesen, fremde Domäne abgewiesen,
+  unbekannter Schlüssel abgewiesen, **untergeschobene `workspaceId`/`reportId`
+  im Aufruf ändern nichts**, ausgestellt wird ausschließlich
+  `accessLevel: View`, das Token des Dienstusers taucht in keiner Antwort auf,
+  CORS nur für erlaubte Herkunft.
+- **Ausweiskontrolle** (`test/entra.test.js`): gegen selbst erzeugte Schlüssel –
+  fremd signiert, nachträglich verändert, `alg: none`, abgelaufen, fremder
+  Mandant, fehlender Bereich.

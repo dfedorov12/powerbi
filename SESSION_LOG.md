@@ -84,3 +84,42 @@ Browser → Power BI (Anzeige mit dem Einbettungs-Token)
 4. Function App anlegen, Umgebungsvariablen setzen,
    `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` als Repository-Geheimnis hinterlegen.
 5. `js/config.js` mit `clientId`, `apiScope`, `brokerUrl` füllen.
+
+## 2026-09-01 (2): Token-Broker fertig gebaut
+
+**Denis:** „Bau mir mal den Token-Broker."
+
+Der Code lag bereits aus (1) vor; gefehlt haben der Nachweis, dass die Endpunkte
+tun was sie sollen, und ein Weg, das Ganze ohne Klickerei nach Azure zu bringen.
+
+**Neu:**
+- `broker/test/api.test.js` – 15 Tests, die die Endpunkte vollständig
+  durchspielen: `@azure/functions` wird durch eine Attrappe ersetzt, die die
+  registrierten Handler einsammelt, `fetch` beantwortet Entra und Power BI. Damit
+  laufen die echten Handler gegen echte Signaturprüfung, ohne Azure und ohne
+  Mandanten. Abgesichert sind vor allem die Fälle, die zählen: ohne Ausweis kein
+  Token (Power BI wird gar nicht erst gefragt), fremde Zielgruppe, fremde Domäne,
+  unbekannter Schlüssel, **untergeschobene `workspaceId`/`reportId` im Aufruf
+  ändern nichts**, `accessLevel` ist immer `View`, das Token des Dienstusers
+  taucht in keiner Antwort auf, CORS nur für die erlaubte Herkunft.
+- `broker/setup-broker.ps1` – legt Ressourcengruppe, Speicherkonto und Function
+  App (Node 20, Linux, Verbrauchsplan) an, setzt alle Einstellungen, **leert die
+  Plattform-CORS-Liste** und hinterlegt auf Wunsch (`-GithubGeheimnis`) das
+  Veröffentlichungsprofil als Repository-Geheimnis.
+- `broker/package-lock.json` – Abhängigkeiten festgezurrt (`@azure/functions` 4.8.2,
+  keine weitere).
+
+**Entscheidungen:**
+- Das Geheimnis geht nur als `SecureString` ins Skript, wird nie ausgegeben und
+  nirgends in eine Datei geschrieben; das Veröffentlichungsprofil wandert direkt
+  in `gh secret set`, ohne Zwischendatei.
+- Die Plattform-CORS-Liste wird aktiv geleert. Eine neue Function App bringt
+  Portal-Herkünfte mit; stehen die Kopfzeilen doppelt, lehnt der Browser die
+  Antwort ab – ein Fehlerbild, das man sonst lange sucht.
+- `WEBSITE_RUN_FROM_PACKAGE=1`, weil der Workflow ein Paket veröffentlicht.
+- Ort `germanywestcentral` als Vorgabe.
+
+**Stand:** 26 Broker-Tests und 8 Sichtbarkeitstests grün. Was jetzt noch fehlt,
+ist ausschließlich das, was ohne Azure-Abonnement und Power-BI-Administrator
+niemand vorwegnehmen kann: `az login`, das Skript laufen lassen, die
+Mandanteneinstellungen setzen, Arbeitsbereich der F4 zuweisen.
