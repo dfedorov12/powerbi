@@ -1,0 +1,45 @@
+name: Broker bereitstellen
+
+# Veröffentlicht den Token-Broker (Ordner broker/) in der Azure Function App.
+#
+# Einmalige Vorbereitung:
+#   1. Function App in Azure anlegen (Node 20, Linux, Verbrauchsplan reicht).
+#   2. Im Portal: Function App -> Verwalten -> Veröffentlichungsprofil abrufen.
+#   3. Den Inhalt als Repository-Geheimnis AZURE_FUNCTIONAPP_PUBLISH_PROFILE
+#      hinterlegen, den Namen der App unten bei APP_NAME eintragen.
+#
+# Die Anwendungseinstellungen (PBI_CLIENT_SECRET usw.) werden bewusst NICHT
+# hier gesetzt, sondern einmalig im Portal - Geheimnisse haben in einem
+# oeffentlichen Repository nichts verloren, auch nicht in einem Workflow.
+
+on:
+  push:
+    branches: [main]
+    paths: ['broker/**', '.github/workflows/deploy-broker.yml']
+  workflow_dispatch:
+
+env:
+  APP_NAME: dihag-berichte-broker
+  PAKET: broker
+  NODE_VERSION: 20.x
+
+jobs:
+  bereitstellen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Abhaengigkeiten installieren
+        run: npm ci --omit=dev || npm install --omit=dev
+        working-directory: ${{ env.PAKET }}
+
+      - name: Veroeffentlichen
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.APP_NAME }}
+          package: ${{ env.PAKET }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}

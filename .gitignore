@@ -1,0 +1,13 @@
+# Geheimnisse und oertliche Einstellungen
+broker/local.settings.json
+broker/node_modules/
+node_modules/
+
+# Azure Functions
+broker/bin/
+broker/obj/
+.python_packages/
+
+# Betriebssystem
+Thumbs.db
+.DS_Store

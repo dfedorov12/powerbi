@@ -1,0 +1,14 @@
+{
+  "name": "dihag-berichte-broker",
+  "version": "1.0.0",
+  "description": "Token-Broker fuer die Power-BI-Einbettung (DIHAG Berichte)",
+  "main": "src/functions/*.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "func start",
+    "test": "node --test test"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.1"
+  }
+}

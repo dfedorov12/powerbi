@@ -1,0 +1,22 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "PBI_TENANT_ID": "fdb70646-023a-403b-a4b9-1f474a935123",
+
+    "PBI_CLIENT_ID": "<ClientId der Dienstuser-Registrierung>",
+    "PBI_CLIENT_SECRET": "<Geheimnis der Dienstuser-Registrierung>",
+
+    "FRONTEND_CLIENT_ID": "<ClientId der Frontend-Registrierung>",
+    "FRONTEND_SCOPE": "Berichte.Lesen",
+
+    "PBI_BERICHTE": "[{\"key\":\"bericht1\",\"workspaceId\":\"<Arbeitsbereich-Id>\",\"reportId\":\"<Bericht-Id>\"}]",
+
+    "ALLOWED_ORIGINS": "https://dfedorov12.github.io,http://localhost:8774",
+    "ERLAUBTE_DOMAENEN": "dihag.com",
+    "ADMIN_UPNS": "administrator@dihag.com,fedorov@dihag.com"
+  },
+  "Host": { "CORS": "" }
+}

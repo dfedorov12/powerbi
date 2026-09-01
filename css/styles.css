@@ -1,0 +1,240 @@
+/* ══════════════════════════════════════════════════════════════════
+   „Berichte“ (Power BI) – DIHAG Foundry Group Corporate Design
+   Azurblau #17509E · Navy #1A2644 · Anthrazit #424241
+   Lichtblau #99B7CD · Orange #F08300 · Schrift: Exo
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  --azur:      #17509E;
+  --navy:      #1A2644;
+  --anthrazit: #424241;
+  --lichtblau: #99B7CD;
+  --orange:    #F08300;
+
+  --azur-dark: #113f7c;
+  --bg:        #f2f5f9;
+  --card:      #ffffff;
+  --text:      var(--anthrazit);
+  --muted:     #6d7d8e;
+  --border:    #d7e0ea;
+  --red:       #b02a37;
+  --red-bg:    #fdecea;
+  --radius:    12px;
+  --shadow:    0 1px 2px rgba(26,38,68,.06), 0 4px 16px rgba(26,38,68,.06);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: "Exo", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--azur); }
+[hidden] { display: none !important; }
+
+/* ── Schaltflächen ────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--azur);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.btn:hover { background: var(--azur-dark); }
+.btn.sec { background: #fff; color: var(--azur); border-color: var(--border); }
+.btn.sec:hover { background: #eef3fa; }
+.btn.ghost {
+  background: transparent; color: #dbe6f4;
+  border-color: rgba(255,255,255,.28);
+}
+.btn.ghost:hover { background: rgba(255,255,255,.12); color: #fff; }
+.btn.sm { padding: 6px 11px; font-size: 13.5px; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ── Boot / Anmeldung ─────────────────────────────────────────────── */
+
+#boot {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(160deg, var(--navy) 0%, #10182b 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px;
+  color: #fff; text-align: center; padding: 24px;
+}
+#boot .boot-logo {
+  background: #fff; border-radius: 14px; padding: 20px 34px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.35);
+}
+#boot .boot-logo img { height: 46px; display: block; }
+#boot .boot-sub { font-size: 20px; font-weight: 600; letter-spacing: .3px; }
+#bootTxt { color: var(--lichtblau); }
+#bootErr {
+  max-width: 620px; background: rgba(176,42,55,.18);
+  border: 1px solid rgba(255,255,255,.22);
+  padding: 14px 18px; border-radius: 10px; color: #ffe2e2;
+}
+
+.spinner {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  animation: dreh .9s linear infinite;
+}
+@keyframes dreh { to { transform: rotate(360deg); } }
+
+/* ── Kein Zugriff ─────────────────────────────────────────────────── */
+
+#noAccess {
+  position: fixed; inset: 0; z-index: 9998;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 24px;
+}
+#noAccess .box {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 34px 40px; max-width: 560px; text-align: center;
+}
+#noAccess h2 { margin: 10px 0 6px; color: var(--navy); }
+
+/* ── Grundgerüst: Kopf – Bericht – Fuß ────────────────────────────── */
+
+#app {
+  min-height: 100%;
+  display: flex; flex-direction: column;
+}
+
+header { background: var(--navy); color: #fff; }
+
+.hdr-top {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 20px;
+}
+.hdr-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.hdr-brand img { height: 30px; filter: brightness(0) invert(1); }
+.hdr-sep { width: 1px; height: 30px; background: rgba(255,255,255,.25); }
+.hdr-title h1 {
+  margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hdr-title span { font-size: 12.5px; color: var(--lichtblau); }
+.hdr-spacer { flex: 1; }
+.hdr-tools { display: flex; gap: 8px; }
+
+.hdr-user { display: flex; align-items: center; gap: 12px; }
+.hdr-user .who { text-align: right; line-height: 1.25; }
+.hdr-user .who b { font-size: 13.5px; display: block; }
+.hdr-user .who small { font-size: 11.5px; color: var(--lichtblau); }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--azur); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+}
+
+.tabs {
+  display: flex; gap: 4px; padding: 0 20px;
+  background: var(--azur-dark); overflow-x: auto;
+}
+.tab {
+  font: inherit; font-size: 14px;
+  background: transparent; border: 0; cursor: pointer;
+  color: #cfe0f3; padding: 10px 16px;
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.tab:hover { color: #fff; }
+.tab.on { color: #fff; border-bottom-color: var(--orange); font-weight: 600; }
+
+main {
+  flex: 1; position: relative;
+  padding: 14px 14px 0;
+  display: flex; min-height: 0;
+}
+
+/* Der Rahmen bekommt die volle verbleibende Höhe – Power BI füllt ihn aus.
+   Ohne feste Höhe rendert die Bibliothek einen 0 Pixel hohen iframe. */
+#berichtRahmen {
+  flex: 1;
+  min-height: calc(100vh - 190px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+#berichtRahmen iframe { border: 0; }
+
+.bericht-status {
+  position: absolute; inset: 14px 14px 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  background: rgba(242,245,249,.94);
+  border-radius: var(--radius);
+  color: var(--muted); text-align: center; padding: 24px;
+}
+.bericht-status.fehler { color: var(--text); }
+.bericht-status .st-titel {
+  font-size: 17px; font-weight: 600; color: var(--red);
+}
+.bericht-status p { max-width: 640px; margin: 0; }
+
+footer {
+  padding: 12px 20px; font-size: 12.5px; color: var(--muted);
+  text-align: center;
+}
+
+/* ── Diagnose ─────────────────────────────────────────────────────── */
+
+#diag {
+  position: fixed; inset: 0; z-index: 9997;
+  background: rgba(26,38,68,.45);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.diag-box {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  width: min(960px, 100%); max-height: 86vh; overflow: auto; padding: 22px 26px;
+}
+.diag-kopf { display: flex; align-items: center; justify-content: space-between; }
+.diag-kopf h3 { margin: 0; color: var(--navy); }
+.diag-kopf .btn.ghost { color: var(--azur); border-color: var(--border); }
+.diag-kopf .btn.ghost:hover { background: #eef3fa; color: var(--azur-dark); }
+#diagBody dl {
+  display: grid; grid-template-columns: 220px 1fr; gap: 6px 14px;
+  margin: 16px 0; font-size: 14px;
+}
+#diagBody dt { color: var(--muted); }
+#diagBody dd { margin: 0; word-break: break-all; }
+#diagBody h4 { margin: 18px 0 8px; color: var(--navy); }
+#diagBody .fehler {
+  background: var(--red-bg); color: var(--red);
+  padding: 10px 12px; border-radius: 8px;
+}
+.diag-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.diag-tab th, .diag-tab td {
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  word-break: break-all;
+}
+.diag-tab th { color: var(--muted); font-weight: 600; }
+.diag-hinweis { color: var(--muted); font-size: 12.5px; }
+
+/* ── Schmale Bildschirme ──────────────────────────────────────────── */
+
+@media (max-width: 780px) {
+  .hdr-top { flex-wrap: wrap; gap: 10px; }
+  .hdr-spacer { display: none; }
+  .hdr-user .who { display: none; }
+  #berichtRahmen { min-height: calc(100vh - 240px); }
+}

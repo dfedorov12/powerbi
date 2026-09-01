@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Berichte · DIHAG Foundry Group</title>
+<link rel="icon" href="assets/dihag-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ══ Anmeldung / Start ══════════════════════════════════════════ -->
+<div id="boot">
+  <div class="boot-logo"><img src="assets/dihag-logo.png" alt="DIHAG Foundry Group"></div>
+  <div class="boot-sub">Berichte</div>
+  <div class="spinner" id="bootSpin"></div>
+  <div id="bootTxt">Anmeldung läuft …</div>
+  <div id="bootErr" hidden></div>
+  <button class="btn" id="bootBtn" hidden>Mit Microsoft anmelden</button>
+</div>
+
+<!-- ══ Kein Bericht freigegeben ═══════════════════════════════════ -->
+<div id="noAccess" hidden>
+  <div class="box">
+    <div style="font-size:52px">📊</div>
+    <h2>Kein Bericht freigegeben</h2>
+    <p id="naMsg"></p>
+    <div class="row" style="justify-content:center;margin-top:18px">
+      <a class="btn" id="naReq" href="mailto:ticket@dihag.com?subject=Zugriff%20auf%20Berichte">📧 Freigabe anfragen</a>
+      <button class="btn sec" id="naOut">Abmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Anwendung ══════════════════════════════════════════════════ -->
+<div id="app" hidden>
+
+  <header>
+    <div class="hdr-top">
+      <div class="hdr-brand">
+        <img src="assets/dihag-logo.png" alt="DIHAG Foundry Group">
+        <div class="hdr-sep"></div>
+        <div class="hdr-title">
+          <h1 id="berichtName">Berichte</h1>
+          <span id="berichtInfo">Power BI</span>
+        </div>
+      </div>
+      <div class="hdr-spacer"></div>
+      <div class="hdr-tools">
+        <button class="btn ghost sm" id="btnAktualisieren" title="Daten neu vom Dienst holen">↻ Aktualisieren</button>
+        <button class="btn ghost sm" id="btnVollbild" title="Vollbild">⛶ Vollbild</button>
+        <button class="btn ghost sm" id="btnDiagnose" hidden title="Nur für Administratoren">🛠 Diagnose</button>
+      </div>
+      <div class="hdr-user">
+        <div class="who">
+          <b id="uName"></b>
+          <small id="uMeta"></small>
+        </div>
+        <div class="avatar" id="uAvatar"></div>
+        <button class="btn ghost sm" id="btnLogout">Abmelden</button>
+      </div>
+    </div>
+    <nav class="tabs" id="tabBar" hidden></nav>
+  </header>
+
+  <main>
+    <div id="berichtRahmen"></div>
+    <div id="berichtStatus" class="bericht-status">Bericht wird geladen …</div>
+  </main>
+
+  <footer>
+    DIHAG Foundry Group · Berichte aus Power BI · nur Ansicht ·
+    <a href="https://rundumdenjob.dihag.de/" target="_blank" rel="noopener">Rund um den Job</a> ·
+    <a id="lnkSupport" href="mailto:ticket@dihag.com">Support</a>
+  </footer>
+
+  <!-- Diagnosefenster -->
+  <div id="diag" hidden>
+    <div class="diag-box">
+      <div class="diag-kopf">
+        <h3>Diagnose</h3>
+        <button class="btn ghost sm" id="diagZu">Schließen</button>
+      </div>
+      <div id="diagBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/data.js"></script>
+<script src="js/embed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
