@@ -17,7 +17,7 @@ const PBI_CONFIG = {
 
   // Frontend-Registrierung (SPA, ohne Geheimnis). setup-powerbi.ps1 legt sie
   // an und gibt die ID aus. NICHT die Registrierung des Dienstusers!
-  clientId: "TODO-FRONTEND-CLIENT-ID",
+  clientId: "5813fded-4258-4736-8a7a-6bcc2b76325b",   // Registrierung "Berichte-Frontend"
 
   // Delegierte Berechtigungen. Bewusst nur User.Read: das erlaubt jede Person
   // im Tenant selbst zu bestätigen, es braucht keine Administratorzustimmung.
@@ -27,14 +27,14 @@ const PBI_CONFIG = {
   // Eigener API-Bereich der Frontend-Registrierung. Damit weist sich die Seite
   // gegenüber dem Broker aus; der Broker prüft Signatur, Aussteller, Zielgruppe
   // und diesen Bereich. Leer lassen = Broker-Aufruf ohne Ausweis (nicht erlaubt).
-  apiScope: "api://TODO-FRONTEND-CLIENT-ID/Berichte.Lesen",
+  apiScope: "api://5813fded-4258-4736-8a7a-6bcc2b76325b/Berichte.Lesen",
 
   /* ── Token-Broker ─────────────────────────────────────────────────
      Kleine Azure Function, die das Geheimnis des Dienstusers hält und das
      Einbettungs-Token erzeugt. Ohne Broker geht es nicht: ein Geheimnis
      darf niemals in einer statischen Seite liegen. Ohne abschließenden
      Schrägstrich. */
-  brokerUrl: "https://TODO-broker.azurewebsites.net/api",
+  brokerUrl: "https://berichte-token-broker.azurewebsites.net/api",
 
   /* ── Berichte ─────────────────────────────────────────────────────
      `key` muss mit dem Schlüssel in der Broker-Einstellung PBI_BERICHTE
@@ -48,8 +48,8 @@ const PBI_CONFIG = {
   berichte: [
     {
       key: "bericht1",
-      name: "Kennzahlen",
-      beschreibung: "Erster eingebundener Power-BI-Bericht",
+      name: "Aktuelle DIHAG Geschäftspartner",
+      beschreibung: "Arbeitsbereich DEV_Reporting_Central",
       domains: "*",
       minRolle: "viewer",
       aktiv: true,

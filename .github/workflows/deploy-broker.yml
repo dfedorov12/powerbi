@@ -3,7 +3,7 @@ name: Broker bereitstellen
 # Veröffentlicht den Token-Broker (Ordner broker/) in der Azure Function App.
 #
 # Einmalige Vorbereitung:
-#   1. Function App in Azure anlegen (Node 20, Linux, Verbrauchsplan reicht).
+#   1. Function App in Azure anlegen - siehe broker/setup-broker.ps1.
 #   2. Im Portal: Function App -> Verwalten -> Veröffentlichungsprofil abrufen.
 #   3. Den Inhalt als Repository-Geheimnis AZURE_FUNCTIONAPP_PUBLISH_PROFILE
 #      hinterlegen, den Namen der App unten bei APP_NAME eintragen.
@@ -19,9 +19,9 @@ on:
   workflow_dispatch:
 
 env:
-  APP_NAME: dihag-berichte-broker
+  APP_NAME: berichte-token-broker
   PAKET: broker
-  NODE_VERSION: 20.x
+  NODE_VERSION: 24.x
 
 jobs:
   bereitstellen:

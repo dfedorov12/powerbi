@@ -1,6 +1,6 @@
 # Token-Broker
 
-Kleine Azure Function (Node 20). Sie hält das Geheimnis des Dienstusers und gibt
+Kleine Azure Function (Node 24, Flex-Verbrauchsplan). Sie hält das Geheimnis des Dienstusers und gibt
 für freigegebene Berichte kurzlebige **Einbettungs-Token** aus.
 
 Warum es sie geben muss: Ein statisches Frontend auf GitHub Pages kann kein
@@ -70,8 +70,10 @@ Veröffentlichungsprofil und hinterlegt es als Repository-Geheimnis
 [deploy-broker.yml](../.github/workflows/deploy-broker.yml).
 
 Voraussetzung ist die Azure CLI (`winget install Microsoft.AzureCLI`). Wer die
-Ressourcen lieber im Portal anlegt: Function App mit **Node 20, Linux,
-Verbrauchsplan**, dann die Einstellungen aus der Tabelle oben eintragen.
+Ressourcen lieber im Portal anlegt: Function App mit **Node 24, Linux,
+Flex-Verbrauchsplan**, dann die Einstellungen aus der Tabelle oben eintragen.
+(Node 20 ist seit dem 30.04.2026 EOL und wird von Azure abgelehnt; der
+klassische Linux-Verbrauchsplan läuft am 30.09.2028 aus.)
 
 Kosten: Der Verbrauchsplan enthält eine Million Aufrufe im Monat kostenfrei.
 Der Broker wird beim Öffnen eines Berichts und danach einmal je Stunde und

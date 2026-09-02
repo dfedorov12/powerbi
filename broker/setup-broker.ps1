@@ -34,10 +34,11 @@ param(
     [string] $BerichtKey = "bericht1",
 
     [string] $TenantId       = "fdb70646-023a-403b-a4b9-1f474a935123",
-    [string] $Ressourcen     = "rg-dihag-berichte",
-    [string] $Ort            = "germanywestcentral",
+    [string] $Ressourcen     = "rg-berichte-broker",
+    # westeurope: dort liegt die F4-Kapazitaet kapdihagdpwesteurope.
+    [string] $Ort            = "westeurope",
     # Muss mit APP_NAME in .github/workflows/deploy-broker.yml uebereinstimmen.
-    [string] $AppName        = "dihag-berichte-broker",
+    [string] $AppName        = "berichte-token-broker",
     [string] $Speicherkonto  = "",
     [string] $Herkunft       = "https://dfedorov12.github.io",
     [string] $Domaenen       = "dihag.com",
@@ -102,11 +103,12 @@ $apps = @(Az functionapp list --resource-group $Ressourcen --query "[].name" -o 
 if ($apps -contains $AppName) {
     Write-Host "  vorhanden." -ForegroundColor Green
 } else {
+    # Flex-Verbrauchsplan: der klassische Linux-Verbrauchsplan laeuft 2028 aus.
+    # Node 24, weil 20 seit dem 30.04.2026 EOL ist und Azure es ablehnt.
     Az functionapp create --name $AppName --resource-group $Ressourcen `
-        --storage-account $Speicherkonto --consumption-plan-location $Ort `
-        --runtime node --runtime-version 20 --functions-version 4 `
-        --os-type Linux --https-only true | Out-Null
-    Write-Host "  angelegt (Node 20, Linux, Verbrauchsplan)." -ForegroundColor Green
+        --storage-account $Speicherkonto --flexconsumption-location $Ort `
+        --runtime node --runtime-version 24 --https-only true | Out-Null
+    Write-Host "  angelegt (Node 24, Flex-Verbrauchsplan)." -ForegroundColor Green
 }
 
 Az webapp config set --name $AppName --resource-group $Ressourcen `
@@ -139,8 +141,7 @@ try {
         "PBI_BERICHTE=$berichte" `
         "ALLOWED_ORIGINS=$Herkunft" `
         "ERLAUBTE_DOMAENEN=$Domaenen" `
-        "ADMIN_UPNS=$AdminUpns" `
-        "WEBSITE_RUN_FROM_PACKAGE=1" | Out-Null
+        "ADMIN_UPNS=$AdminUpns" | Out-Null
     Write-Host "  gesetzt (das Geheimnis wird hier nicht ausgegeben)." -ForegroundColor Green
 } finally {
     $klartext = $null

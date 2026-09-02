@@ -21,8 +21,11 @@
 # ======================================================================
 
 param(
-    [string] $Anzeigename    = "DIHAG Berichte",
-    [string] $DienstName     = "DIHAG Berichte Dienstuser",
+    [string] $Anzeigename    = "Berichte-Frontend",
+    # Bestehende Frontend-Registrierung gezielt ansprechen (statt ueber den
+    # Anzeigenamen zu suchen). Leer lassen, um eine neue anzulegen.
+    [string] $FrontendAppId  = "5813fded-4258-4736-8a7a-6bcc2b76325b",
+    [string] $DienstName     = "fabric_report_service_user",
     [string] $GruppenName    = "PowerBI-Einbettung",
     [string[]] $RedirectUris = @(
         "https://dfedorov12.github.io/powerbi/",
@@ -76,7 +79,12 @@ $benoetigt = @(
 )
 if ($MitRechteliste) { $benoetigt += @{ id = $ID_SITES_READ; type = "Scope" } }
 
-$front = Find-App $Anzeigename
+$front = $null
+if ($FrontendAppId) {
+    $r = Gx -Uri "$g/applications?`$filter=appId eq '$FrontendAppId'"
+    if ($r.value -and $r.value.Count -gt 0) { $front = $r.value[0] }
+}
+if (-not $front) { $front = Find-App $Anzeigename }
 if ($front) {
     Write-Host "  vorhanden (appId $($front.appId))" -ForegroundColor Green
 } else {
@@ -113,29 +121,37 @@ if ($scopeId) {
     Write-Host "  API-Bereich '$BereichName' vorhanden." -ForegroundColor Green
 } else {
     $scopeId = [guid]::NewGuid().ToString()
+    $bereich = @{
+        id    = $scopeId
+        value = $BereichName
+        type  = "User"       # jede Person darf selbst zustimmen
+        isEnabled = $true
+        adminConsentDisplayName = "Berichte anzeigen"
+        adminConsentDescription = "Erlaubt der Seite, beim Token-Dienst ein Einbettungs-Token fuer freigegebene Power-BI-Berichte anzufordern."
+        userConsentDisplayName  = "Berichte anzeigen"
+        userConsentDescription  = "Erlaubt der Seite, Ihnen freigegebene Power-BI-Berichte anzuzeigen."
+    }
+
+    # ZWEI Schritte noetig: Graph lehnt eine Vorautorisierung ab, deren Bereich
+    # es noch nicht kennt ("Permission Id that cannot be found in the
+    # AppPermissions sets"). Beim zweiten PATCH muss "api" komplett erneut
+    # geschickt werden - ein PATCH ersetzt die ganze Eigenschaft.
     Gx -Method PATCH -Uri "$g/applications/$($front.id)" -Body @{
         identifierUris = @("api://$frontAppId")
+        api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @($bereich) }
+    } | Out-Null
+
+    Gx -Method PATCH -Uri "$g/applications/$($front.id)" -Body @{
         api = @{
             requestedAccessTokenVersion = 2
-            oauth2PermissionScopes = @(
-                @{
-                    id    = $scopeId
-                    value = $BereichName
-                    type  = "User"       # jede Person darf selbst zustimmen
-                    isEnabled = $true
-                    adminConsentDisplayName = "Berichte anzeigen"
-                    adminConsentDescription = "Erlaubt der Seite, beim Token-Dienst ein Einbettungs-Token fuer freigegebene Power-BI-Berichte anzufordern."
-                    userConsentDisplayName  = "Berichte anzeigen"
-                    userConsentDescription  = "Erlaubt der Seite, Ihnen freigegebene Power-BI-Berichte anzuzeigen."
-                }
-            )
+            oauth2PermissionScopes = @($bereich)
             # Die Seite darf ihren eigenen Bereich ohne Rueckfrage nutzen.
             preAuthorizedApplications = @(
                 @{ appId = $frontAppId; delegatedPermissionIds = @($scopeId) }
             )
         }
     } | Out-Null
-    Write-Host "  API-Bereich api://$frontAppId/$BereichName angelegt." -ForegroundColor Green
+    Write-Host "  API-Bereich api://$frontAppId/$BereichName angelegt und vorautorisiert." -ForegroundColor Green
 }
 
 Ensure-ServicePrincipal $frontAppId | Out-Null
@@ -234,6 +250,10 @@ Write-Host "     - 'Dienstprinzipale duerfen Power-BI-APIs verwenden'  -> aktiv 
 Write-Host "     - 'Inhalte in Apps einbetten'                          -> aktiv"
 Write-Host "2. Im Arbeitsbereich: '$DienstName' (oder die Gruppe) als MITGLIED hinzufuegen."
 Write-Host "3. Arbeitsbereich einer Kapazitaet zuweisen (F4)."
+Write-Host "   ACHTUNG: Liegt das Semantikmodell des Berichts in einem ANDEREN"
+Write-Host "   Arbeitsbereich, braucht der Dienstuser auch dort Zugriff -"
+Write-Host "   sonst scheitert GenerateToken mit PowerBINotAuthorizedException,"
+Write-Host "   obwohl der Bericht selbst lesbar ist."
 Write-Host "4. Arbeitsbereich-Id und Bericht-Id in PBI_BERICHTE eintragen."
 Write-Host "   (Beide stehen in der Power-BI-Adresse:"
 Write-Host "    app.powerbi.com/groups/<workspaceId>/reports/<reportId>/...)"

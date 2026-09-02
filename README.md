@@ -11,6 +11,23 @@ ausgestellt.
 
 ---
 
+## Aktueller Stand
+
+| | |
+|---|---|
+| Frontend | https://dfedorov12.github.io/powerbi/ |
+| Broker | https://berichte-token-broker.azurewebsites.net/api · `/health` meldet `eingerichtet: true` |
+| Azure | Abonnement `sub-dihag-dp-global`, Ressourcengruppe `rg-berichte-broker`, westeurope, Flex-Verbrauchsplan, Node 24 |
+| Frontend-Registrierung | `Berichte-Frontend` · `5813fded-4258-4736-8a7a-6bcc2b76325b` |
+| Dienstuser | `fabric_report_service_user` · `c75f174c-1d0e-4389-9a93-cd27f25ccbcd` |
+| Kapazität | `kapdihagdpwesteurope` (F4, aktiv) |
+| Bericht | „Aktuelle DIHAG Geschäftspartner" in `DEV_Reporting_Central` |
+
+**Offen:** Das Semantikmodell des Berichts liegt im Arbeitsbereich
+`DEV_Semantic_Models_Central`. Solange der Dienstuser dort keinen Zugriff hat,
+scheitert `GenerateToken` mit `PowerBINotAuthorizedException` – der Bericht
+selbst ist lesbar, das Modell dahinter nicht.
+
 ## Warum es zwei Teile gibt
 
 | Teil | Wo | Aufgabe |
@@ -90,8 +107,8 @@ cd broker
 ./setup-broker.ps1 -DienstClientId "..." -FrontendClientId "..." -WorkspaceId "..." -ReportId "..." -DienstSecret (Read-Host -AsSecureString "Geheimnis") -GithubGeheimnis
 ```
 
-Das legt Ressourcengruppe, Speicherkonto und Function App (Node 20, Linux,
-Verbrauchsplan) an, trägt alle Einstellungen ein, leert die Plattform-CORS-Liste
+Das legt Ressourcengruppe, Speicherkonto und Function App (Node 24, Linux,
+Flex-Verbrauchsplan) an, trägt alle Einstellungen ein, leert die Plattform-CORS-Liste
 und hinterlegt das Veröffentlichungsprofil als Repository-Geheimnis
 `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`. Danach veröffentlicht der Workflow
 [deploy-broker.yml](.github/workflows/deploy-broker.yml) bei jedem Push auf
@@ -194,6 +211,7 @@ ausgestellt wird ausschließlich `accessLevel: View`.
 | `AADSTS50011` | Redirect-URI fehlt in der Frontend-Registrierung |
 | Broker meldet 401 | Zustimmung für `api://…/Berichte.Lesen` fehlt |
 | Broker meldet 404 | Der Schlüssel steht nicht in `PBI_BERICHTE` |
-| `PowerBINotAuthorizedException` | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
+| `PowerBINotAuthorizedException` beim GET | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
+| `PowerBINotAuthorizedException` nur bei `GenerateToken` | Das **Semantikmodell liegt in einem anderen Arbeitsbereich** (`datasetWorkspaceId` im Bericht prüfen). Der Dienstuser braucht auch dort Zugriff – die Dataset-Rechte-API nimmt keine Dienstprinzipale, es muss über die Arbeitsbereichsrolle gehen |
 | Bericht bleibt leer, Konsole meldet CORS | `ALLOWED_ORIGINS` falsch, oder die CORS-Liste der Function App im Portal ist nicht leer |
 | „Free trial version" im Bericht | Arbeitsbereich liegt auf keiner Kapazität |

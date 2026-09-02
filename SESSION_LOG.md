@@ -123,3 +123,57 @@ tun was sie sollen, und ein Weg, das Ganze ohne Klickerei nach Azure zu bringen.
 ist ausschließlich das, was ohne Azure-Abonnement und Power-BI-Administrator
 niemand vorwegnehmen kann: `az login`, das Skript laufen lassen, die
 Mandanteneinstellungen setzen, Arbeitsbereich der F4 zuweisen.
+
+## 2026-09-02 (3): Broker steht in Azure
+
+**Denis:** Frontend-Registrierung `Berichte-Frontend`
+(`5813fded-4258-4736-8a7a-6bcc2b76325b`, Objekt `2db1c573-…`) selbst angelegt,
+dazu Workspace `bc0c9d17-…` und Report `ef3cebdd-…`; Dienstuser
+`fabric_report_service_user` soll erstellt werden.
+
+**Gebaut (alles über die Azure CLI, Microsoft.Graph ist hier nicht installiert):**
+- Dienstuser `fabric_report_service_user` – AppId `c75f174c-1d0e-4389-9a93-cd27f25ccbcd`,
+  Dienstprinzipal `3f7eec3a-7812-4ea0-8fbe-7953da00f6d3`.
+- Frontend-Registrierung ergänzt: `api://5813fded-…` als identifierUri,
+  Bereich `Berichte.Lesen` (Typ *User*), Tokenversion 2, Selbst-Vorautorisierung,
+  Redirect `http://localhost:8774/` für den Testserver.
+- Azure: `rg-berichte-broker` in **westeurope** (dort liegt die F4), Speicherkonto
+  `stberichte127222`, Function App **`berichte-token-broker`** im
+  **Flex-Verbrauchsplan mit Node 24**, TLS 1.2, alle neun Einstellungen gesetzt.
+  Geheimnis (2 Jahre) direkt aus `az ad app credential reset` in die App-Einstellung
+  gepipet – es wurde nie ausgegeben und nie in eine Datei geschrieben.
+- Code als Paket mit `node_modules` veröffentlicht (640 KB), `/api/health` meldet
+  `eingerichtet: true`.
+- Dienstuser als **Member** in `DEV_Reporting_Central` eingetragen.
+
+**Auf dem Weg gelernt (Fallstricke, die im Code stehen sollten):**
+1. **Node 20 ist seit 30.04.2026 EOL**, Azure lehnt `--runtime-version 20` ab.
+   Jetzt Node 24 + Flex-Verbrauchsplan (der klassische läuft 2028 aus).
+   `WEBSITE_RUN_FROM_PACKAGE` gibt es im Flex-Plan nicht.
+2. **Graph lehnt Bereich + Vorautorisierung in einem PATCH ab**
+   („Permission Id that cannot be found in the AppPermissions sets"). Erst den
+   Bereich anlegen, dann vorautorisieren – und dabei `api` komplett erneut
+   schicken, weil PATCH die ganze Eigenschaft ersetzt. `setup-powerbi.ps1` hatte
+   genau diesen Fehler und ist korrigiert.
+3. **Die Dataset-Rechte-API nimmt keine Dienstprinzipale**
+   („API supported only for User or Group principal types") – Zugriff auf ein
+   Semantikmodell geht nur über die Arbeitsbereichsrolle oder eine Entra-Gruppe.
+4. Bei Flex-Apps liegt die Ausgabe von `az functionapp show` unter `properties.*`,
+   nicht auf oberster Ebene.
+
+**Ende-zu-Ende geprüft** (Azure CLI kurzzeitig für `Berichte.Lesen`
+vorautorisiert, danach wieder entfernt): Ausweisprüfung greift, der Dienstuser
+darf den Bericht lesen – aber `GenerateToken` scheitert mit
+`PowerBINotAuthorizedException` (HTTP 401).
+
+**Ursache gefunden:** `datasetWorkspaceId` des Berichts ist
+`226be186-189e-4aa1-914f-773f96ea0b0b` (**`DEV_Semantic_Models_Central`**,
+Modell „Aktuelle DIHAG Geschäftspartner", Besitzer kutscher@dihag.com) – ein
+anderer Arbeitsbereich als der des Berichts. Beide liegen auf derselben F4.
+Die Mandanteneinstellungen sind korrekt: *Embed content in apps* = True,
+*Service principals can call Fabric public APIs* = True.
+
+**Offen (Entscheidung Denis):** Wie bekommt der Dienstuser Zugriff auf
+`DEV_Semantic_Models_Central` – direkt als Rolle oder über die dort übliche
+Entra-Gruppe (`Fabric_WS_Semantic_Models_Central_Viewer` / `_Member`)?
+Der Arbeitsbereich gehört Kutscher.
