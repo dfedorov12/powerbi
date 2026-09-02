@@ -2,21 +2,50 @@ name: Broker bereitstellen
 
 # Veröffentlicht den Token-Broker (Ordner broker/) in der Azure Function App.
 #
-# Einmalige Vorbereitung:
-#   1. Function App in Azure anlegen - siehe broker/setup-broker.ps1.
-#   2. Im Portal: Function App -> Verwalten -> Veröffentlichungsprofil abrufen.
-#   3. Den Inhalt als Repository-Geheimnis AZURE_FUNCTIONAPP_PUBLISH_PROFILE
-#      hinterlegen, den Namen der App unten bei APP_NAME eintragen.
+# WICHTIG: Die App läuft im Flex-Verbrauchsplan. Dort ist die
+# SCM-Basisauthentifizierung standardmäßig abgeschaltet, ein
+# Veröffentlichungsprofil funktioniert also NICHT. Die Anmeldung läuft
+# stattdessen über OpenID Connect - ganz ohne Geheimnis im Repository.
 #
-# Die Anwendungseinstellungen (PBI_CLIENT_SECRET usw.) werden bewusst NICHT
-# hier gesetzt, sondern einmalig im Portal - Geheimnisse haben in einem
-# oeffentlichen Repository nichts verloren, auch nicht in einem Workflow.
+# Einmalige Vorbereitung (Azure CLI, angemeldet als Administrator):
+#
+#   # 1. Identität für die Bereitstellung anlegen
+#   az ad app create --display-name "github-berichte-broker-deploy"
+#   az ad sp create --id <appId>
+#
+#   # 2. Vertrauensstellung zu genau diesem Repository und Zweig
+#   az ad app federated-credential create --id <appId> --parameters '{
+#     "name": "powerbi-main",
+#     "issuer": "https://token.actions.githubusercontent.com",
+#     "subject": "repo:dfedorov12/powerbi:ref:refs/heads/main",
+#     "audiences": ["api://AzureADTokenExchange"] }'
+#
+#   # 3. Recht auf die Ressourcengruppe - nicht mehr
+#   az role assignment create --assignee <appId> --role "Contributor" \
+#     --scope /subscriptions/<subId>/resourceGroups/rg-berichte-broker
+#
+#   # 4. Werte als Repository-Variablen hinterlegen (keine Geheimnisse!)
+#   gh variable set AZURE_CLIENT_ID       --body "<appId>"  --repo dfedorov12/powerbi
+#   gh variable set AZURE_TENANT_ID       --body "<tid>"    --repo dfedorov12/powerbi
+#   gh variable set AZURE_SUBSCRIPTION_ID --body "<subId>"  --repo dfedorov12/powerbi
+#
+# Bis das eingerichtet ist, wird von Hand veröffentlicht:
+#   az functionapp deployment source config-zip -g rg-berichte-broker \
+#     -n berichte-token-broker --src broker.zip
+#
+# Die Anwendungseinstellungen (PBI_CLIENT_SECRET usw.) setzt dieser Workflow
+# bewusst nicht - Geheimnisse haben in einem öffentlichen Repository nichts
+# verloren, auch nicht in einem Workflow.
 
 on:
   push:
     branches: [main]
     paths: ['broker/**', '.github/workflows/deploy-broker.yml']
   workflow_dispatch:
+
+permissions:
+  id-token: write      # für die OIDC-Anmeldung
+  contents: read
 
 env:
   APP_NAME: berichte-token-broker
@@ -33,13 +62,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # node_modules wandert mit ins Paket - so braucht die Cloud keinen Build.
       - name: Abhaengigkeiten installieren
         run: npm ci --omit=dev || npm install --omit=dev
         working-directory: ${{ env.PAKET }}
+
+      - name: An Azure anmelden (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Veroeffentlichen
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.APP_NAME }}
           package: ${{ env.PAKET }}
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}

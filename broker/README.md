@@ -63,11 +63,18 @@ az login
 ```
 
 Das Geheimnis wird nur als `SecureString` entgegengenommen, nie ausgegeben und
-nirgends in eine Datei geschrieben. `-GithubGeheimnis` holt zusätzlich das
-Veröffentlichungsprofil und hinterlegt es als Repository-Geheimnis
-`AZURE_FUNCTIONAPP_PUBLISH_PROFILE` – danach veröffentlicht jeder Push auf
-`main`, der `broker/` berührt, über
-[deploy-broker.yml](../.github/workflows/deploy-broker.yml).
+nirgends in eine Datei geschrieben.
+
+> **`-GithubGeheimnis` funktioniert im Flex-Verbrauchsplan nicht.** Dort ist die
+> SCM-Basisauthentifizierung abgeschaltet, ein Veröffentlichungsprofil wird also
+> abgewiesen. Der Workflow
+> [deploy-broker.yml](../.github/workflows/deploy-broker.yml) meldet sich
+> stattdessen per OpenID Connect an – die einmalige Einrichtung steht dort im
+> Kopf der Datei. Bis dahin wird von Hand veröffentlicht:
+>
+> ```powershell
+> az functionapp deployment source config-zip -g rg-berichte-broker -n berichte-token-broker --src broker.zip
+> ```
 
 Voraussetzung ist die Azure CLI (`winget install Microsoft.AzureCLI`). Wer die
 Ressourcen lieber im Portal anlegt: Function App mit **Node 24, Linux,

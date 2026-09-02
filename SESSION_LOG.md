@@ -177,3 +177,13 @@ Die Mandanteneinstellungen sind korrekt: *Embed content in apps* = True,
 `DEV_Semantic_Models_Central` – direkt als Rolle oder über die dort übliche
 Entra-Gruppe (`Fabric_WS_Semantic_Models_Central_Viewer` / `_Member`)?
 Der Arbeitsbereich gehört Kutscher.
+
+**Nachtrag:** Im Flex-Verbrauchsplan ist die SCM-Basisauthentifizierung aus
+(`basicPublishingCredentialsPolicies/scm.allow = false`) – ein
+Veröffentlichungsprofil wird abgewiesen. `deploy-broker.yml` meldet sich deshalb
+jetzt per **OpenID Connect** an (Repository-*Variablen*, keine Geheimnisse); die
+einmalige Einrichtung der föderierten Anmeldeinformation steht im Kopf der
+Workflow-Datei. Bis dahin: `az functionapp deployment source config-zip`.
+
+**Entscheidung Denis:** Zugriff auf `DEV_Semantic_Models_Central` wird erst mit
+Kutscher geklärt – der Arbeitsbereich bleibt unangetastet.
