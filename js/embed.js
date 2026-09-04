@@ -44,11 +44,44 @@ const EMBED = (() => {
     return d;
   }
 
+  async function brokerPut(pfad, koerper) {
+    const token = await AUTH.getApiToken();
+    const url = String(C.brokerUrl).replace(/\/+$/, "") + pfad;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "PUT",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(koerper)
+      });
+    } catch (e) {
+      const err = new Error("Der Token-Dienst ist nicht erreichbar (" + e.message + ").");
+      err.art = "broker_offline";
+      throw err;
+    }
+    const d = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = new Error(d?.fehler || res.statusText || ("HTTP " + res.status));
+      err.status = res.status;
+      err.art = d?.art || "broker";
+      err.detail = d?.detail || "";
+      throw err;
+    }
+    return d;
+  }
+
   const holeEinbettung = key =>
     brokerGet("/embed-token?bericht=" + encodeURIComponent(key));
 
+  /** Was darf die angemeldete Person sehen, darf sie verwalten? */
+  const holeZugriff = () => brokerGet("/zugriff");
+
   /** Nur für Administratoren: welche Berichte sieht der Dienstuser? */
   const holeBerichtsliste = () => brokerGet("/berichte");
+
+  /** Zugriffsregeln lesen bzw. vollständig ersetzen (nur Administratoren). */
+  const holeRechte = () => brokerGet("/rechte");
+  const speichereRechte = regeln => brokerPut("/rechte", { regeln });
 
   /* ── Bibliothek ───────────────────────────────────────────────────── */
 
@@ -90,8 +123,14 @@ const EMBED = (() => {
     if (e?.status === 401)
       return "Der Token-Dienst hat die Anmeldung abgelehnt. Meist fehlt die "
            + "Zustimmung für den Bereich " + C.apiScope + ".";
+    if (e?.status === 403 && art === "keine_freigabe")
+      return "Für dieses Konto ist der Bericht nicht freigegeben. "
+           + "Ein Administrator kann das unter „Einstellungen → Berechtigungen“ ändern."
+           + (e.detail ? " (" + e.detail + ")" : "");
+    if (e?.status === 403 && art === "kein_admin")
+      return "Diese Ansicht ist Administratoren vorbehalten.";
     if (e?.status === 403)
-      return "Für diesen Bericht ist kein Zugriff freigegeben.";
+      return "Für diesen Bericht ist kein Zugriff freigegeben." + (e.detail ? " " + e.detail : "");
     if (e?.status === 404 && art === "unbekannter_bericht")
       return "Dieser Bericht steht nicht in der Freigabeliste des Token-Dienstes "
            + "(Einstellung PBI_BERICHTE).";
@@ -209,5 +248,6 @@ const EMBED = (() => {
   }
 
   return { zeigeBericht, beenden, vollbild, neuLaden, fehlerText,
-           holeBerichtsliste, holeEinbettung };
+           holeBerichtsliste, holeEinbettung, holeZugriff,
+           holeRechte, speichereRechte };
 })();

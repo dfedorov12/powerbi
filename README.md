@@ -31,15 +31,21 @@ Rechte des Dienstusers – bewusst die kleinste Stufe, beides nachgemessen:
 
 | Arbeitsbereich | Rolle | wofür |
 |---|---|---|
-| `DEV_Reporting_Central` | **Viewer** | der Bericht |
-| `DEV_Semantic_Models_Central` | **Viewer** | das Semantikmodell dahinter |
+| `DEV_Reporting_Central` | **Member** | der Bericht |
+| `DEV_Semantic_Models_Central` | **Member** | das Semantikmodell dahinter |
 | `DEV_Data_Engineering_Central` | **Viewer** | das Lakehouse `lh_gold`, aus dem das Modell liest |
 
-*Viewer* genügt überall – Microsoft dokumentiert *Member*, geprüft ist die
-niedrigere Stufe. Alle drei Stufen sind nötig, weil die Kette
-Bericht → Semantikmodell → Lakehouse über drei Arbeitsbereiche läuft und das
-Direct-Lake-Modell per SSO mit der Identität des Dienstusers auf die Daten
-zugreift.
+Alle drei sind nötig: Die Kette Bericht → Semantikmodell → Lakehouse läuft über
+drei Arbeitsbereiche, und das Direct-Lake-Modell greift per SSO mit der
+Identität des Dienstusers auf die Daten zu.
+
+> **Vorsicht beim Messen:** Power BI merkt sich Berechtigungsentscheidungen
+> einige Minuten. Wer direkt nach einer Änderung testet, misst womöglich noch
+> den alten Stand. Genau das ist hier passiert: *Viewer* auf den ersten beiden
+> Arbeitsbereichen sah kurz nach dem Herabstufen aus, als würde es reichen –
+> Minuten später scheiterte `GenerateToken` mit 401. **Für Bericht und
+> Semantikmodell braucht es *Member*.** Nach jeder Rechteänderung also einige
+> Minuten warten und erneut prüfen.
 
 ## Warum es zwei Teile gibt
 
@@ -149,24 +155,43 @@ Danach GitHub Pages aktivieren (Branch `main`, Ordner `/`).
 
 ---
 
-## Sichtbarkeit
+## Berechtigungen
 
-| Feld | Wirkung |
-|---|---|
-| `domains` | `*` oder Liste von E-Mail-Domänen (`dihag.com; gienanth.de`) |
-| `minRolle` | `viewer` (Standard), `editor`, `admin` |
-| `aktiv` | `false` blendet den Bericht aus, ohne ihn zu löschen |
+Wer welchen Bericht sieht, steht in **Zugriffsregeln**. Administratoren pflegen
+sie in der App unter **Einstellungen → Berechtigungen**; gespeichert werden sie
+im Broker (Azure Table `Rechte`), und **dort werden sie auch durchgesetzt** –
+bei jedem Einbettungs-Token neu.
 
-Jede angemeldete Person im Mandanten ist standardmäßig `viewer`. Höhere Rollen
-kommen – wenn gewünscht – aus der zentralen Liste `AppPermissions` auf
-`/sites/IT`; dafür in `config.js` `permList: "AppPermissions"` setzen und
-`Sites.Read.All` in `scopes` ergänzen (braucht Administratorzustimmung).
-Bleibt `permList` leer, kommt die App mit `User.Read` aus und niemand muss
-etwas zustimmen.
+Eine Regel ordnet einem **Prinzipal** Berichte zu:
 
-Das ist **Komfort, keine Sicherheitsgrenze**: Verbindlich ist die Freigabeliste
-im Broker. Wer einen Bericht wirklich nicht sehen darf, darf ihn dort nicht
-stehen haben – oder er bekommt eine eigene Freigabe über `ERLAUBTE_DOMAENEN`.
+| Typ | Wert | greift auf |
+|---|---|---|
+| Benutzer | E-Mail-Adresse | genau dieses Konto |
+| Gruppe | **Objekt-Id** der Gruppe | Sicherheits-, Microsoft-365-, Verteiler- und dynamische Gruppen |
+| Domäne | `dihag.com` | alle Adressen dieser Domäne |
+
+Dazu je Regel: welche Berichte (`*` oder einzelne), ob die Regel ihren
+Prinzipalen auch das **Verwalten** erlaubt, und ob sie aktiv ist. Es gilt die
+**Summe** aller zutreffenden Regeln.
+
+- Gruppen werden über die **Objekt-Id** verglichen, nicht über den Namen –
+  ein umbenannter Anzeigename darf keine Berechtigung still verschieben.
+  Die Oberfläche bietet die eigenen Gruppen zur Auswahl an (`getMemberGroups`,
+  kommt mit `User.Read` aus); fremde Gruppen trägt man über die Id ein.
+- **Solange keine Regel existiert**, gilt die Übergangsregelung: Wer aus einer
+  Domäne in `ERLAUBTE_DOMAENEN` kommt, sieht alles. **Ab der ersten Regel gilt
+  ausschließlich sie** – wer von keiner getroffen wird, sieht nichts.
+- Die Konten in der Broker-Einstellung `ADMIN_UPNS` dürfen immer verwalten und
+  können sich nicht aussperren. Wer nur über eine Regel Administrator ist, wird
+  vom Broker daran gehindert, sich selbst diese Regel zu entziehen.
+
+### Woher der Broker die Gruppen kennt
+
+Aus dem Token: Die Frontend-Registrierung hat `groupMembershipClaims = "All"`,
+Entra legt die Mitgliedschaften also in den Anspruch `groups`. Bei sehr vielen
+Mitgliedschaften (mehrere hundert) lässt Entra den Anspruch weg – der Broker
+meldet das dann als `gruppenUeberlauf`, und gruppenbasierte Regeln greifen
+nicht mehr. Das steht auch in der Diagnose.
 
 ---
 
@@ -180,6 +205,7 @@ js/auth.js            PKCE-Anmeldung, Token fuer zwei Zielgruppen
 js/graph.js           schlanker Graph-Zugriff (Profil, optional Rechteliste)
 js/data.js            Benutzerkontext, Rolle, Sichtbarkeit
 js/embed.js           Broker-Aufruf, powerbi-client, Token-Erneuerung
+js/set-rechte.js      Einstellungen -> Berechtigungen (nur Administratoren)
 js/app.js             Oberflaeche
 broker/               Azure Function (Token-Broker)
 tests/                Sichtbarkeitslogik
@@ -227,6 +253,8 @@ ausgestellt wird ausschließlich `accessLevel: View`.
 | Broker meldet 404 | Der Schlüssel steht nicht in `PBI_BERICHTE` |
 | `PowerBINotAuthorizedException` beim GET | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
 | `PowerBINotAuthorizedException` nur bei `GenerateToken` | Das **Semantikmodell liegt in einem anderen Arbeitsbereich** (`datasetWorkspaceId` im Bericht prüfen). Der Dienstuser braucht auch dort Zugriff – die Dataset-Rechte-API nimmt keine Dienstprinzipale, es muss über die Arbeitsbereichsrolle gehen |
+| Nach einer Rechteänderung ändert sich nichts – oder ein Test schlägt später doch fehl | Power BI merkt sich Berechtigungsentscheidungen einige Minuten. Nach Änderungen warten und erneut prüfen, nicht sofort schließen |
+| Bericht plötzlich für alle gesperrt | Es existiert mindestens eine Regel, und niemand wird getroffen. Unter Einstellungen → Berechtigungen prüfen; `ADMIN_UPNS` kommt immer durch |
 | `Embedding a DirectLake dataset is not supported with V1 embed token` | Der berichtsbezogene Endpunkt `/groups/…/reports/…/GenerateToken` kann keine Direct-Lake-Modelle. Der Broker nimmt deshalb den mandantenweiten `/GenerateToken` mit `datasets` + `reports` |
 | Bericht wird angezeigt, aber „Es konnte keine Verbindung mit der Datenquelle … hergestellt werden" | Das Direct-Lake-Modell greift per SSO mit der Identität des Dienstusers auf das Lakehouse durch. Der braucht deshalb auch im **Arbeitsbereich des Lakehouse** die Rolle *Viewer*. Die Adresse im Fehlertext (`…datawarehouse.fabric.microsoft.com`, `database`) nennt die Element-Id – über die Fabric-Admin-API findet man Arbeitsbereich und Namen |
 | Bericht bleibt leer, Konsole meldet CORS | Die **Plattform-CORS-Liste** der Function App ist leer oder unvollständig – der Host beantwortet `OPTIONS` selbst und lässt die Vorabfrage nicht zum Code durch. Beide Stellen pflegen: Plattformliste **und** `ALLOWED_ORIGINS`; die Liste greift erst nach einem Neustart |

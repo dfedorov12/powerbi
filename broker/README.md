@@ -13,9 +13,12 @@ Einbettungs-Token darf deshalb nur serverseitig entstehen.
 
 | Endpunkt | Anmeldung | Zweck |
 |---|---|---|
-| `GET /api/health` | keine | Lebenszeichen: ist alles konfiguriert? |
+| `GET /api/health` | keine | Lebenszeichen: ist alles konfiguriert, wie viele Regeln? |
 | `GET /api/embed-token?bericht=<key>` | Entra-Token des Betrachters | Einbettungs-Token, nur lesend (`allowEdit: false`) |
-| `GET /api/berichte` | Entra-Token, UPN in `ADMIN_UPNS` | Was der Dienstuser sieht (Hilfe beim Einrichten) |
+| `GET /api/zugriff` | Entra-Token | Was darf ich sehen, darf ich verwalten? |
+| `GET /api/rechte` | Entra-Token, Verwaltungsrecht | Zugriffsregeln lesen |
+| `PUT /api/rechte` | Entra-Token, Verwaltungsrecht | Regelmenge vollständig ersetzen |
+| `GET /api/berichte` | Entra-Token, Verwaltungsrecht | Was der Dienstuser sieht (Hilfe beim Einrichten) |
 
 Der Broker prüft jedes Aufrufer-Token vollständig selbst: Signatur gegen die
 öffentlichen Schlüssel von Entra, Aussteller, Mandant, Zielgruppe, Laufzeit und
@@ -24,6 +27,39 @@ den Bereich `Berichte.Lesen`. Ohne gültigen Ausweis gibt es kein Token.
 **Arbeitsbereichs- und Bericht-IDs kommen niemals vom Aufrufer**, sondern
 ausschließlich aus der Freigabeliste `PBI_BERICHTE`. Auch wer das Frontend in
 der Entwicklerkonsole manipuliert, kommt damit an keinen weiteren Bericht.
+
+Über der Freigabeliste liegt die **Zugriffsregel**: Selbst für einen
+freigegebenen Bericht gibt es nur dann ein Token, wenn eine Regel den Aufrufer
+trifft (Benutzer, Gruppe oder Domäne). Auch das entscheidet sich hier und nicht
+im Frontend.
+
+### Zugriffsregeln
+
+Gespeichert in **Azure Table Storage** (Tabelle `Rechte`, eine Partition) im
+Speicherkonto der Function App – nicht in einer SharePoint-Liste wie in den
+übrigen DIHAG-Apps. Grund: Die Regeln müssen dort gelten, wo die Token
+entstehen. Läge die Liste in SharePoint, bräuchte der Broker dafür
+Graph-Berechtigungen, und die Regeln wären nur so verbindlich wie das Frontend.
+
+```json
+{ "typ": "gruppe",              // benutzer | gruppe | domaene
+  "wert": "<Objekt-Id / E-Mail / Domäne>",
+  "name": "Controlling",         // nur zur Anzeige
+  "berichte": ["bericht1"],      // oder ["*"]
+  "admin": false,                // darf die Regeln verwalten
+  "aktiv": true }
+```
+
+Gruppenmitgliedschaften liest der Broker aus dem **Token** (`groups`-Anspruch);
+die Frontend-Registrierung muss dafür `groupMembershipClaims = "All"` haben –
+das schließt Verteiler- und Microsoft-365-Gruppen ein. Bei sehr vielen
+Mitgliedschaften lässt Entra den Anspruch weg; der Broker meldet das als
+`gruppenUeberlauf`, statt es als „keine Gruppen" auszulegen.
+
+Zwei Sicherungen gegen das Aussperren: Die Konten in `ADMIN_UPNS` dürfen immer
+verwalten, und wer nur über eine Regel Administrator ist, kann sich diese Regel
+nicht selbst entziehen (HTTP 400 `aussperrung`). Das greift auch, wenn man die
+Regelmenge leeren will – dann erst über `ADMIN_UPNS` gehen.
 
 ---
 
@@ -41,7 +77,8 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 | `PBI_BERICHTE` | `[{"key":"bericht1","workspaceId":"…","reportId":"…"}]` | Freigabeliste |
 | `ALLOWED_ORIGINS` | `https://dfedorov12.github.io` | erlaubte Herkunft des Frontends |
 | `ERLAUBTE_DOMAENEN` | `dihag.com` | optional: nur diese E-Mail-Domänen |
-| `ADMIN_UPNS` | `administrator@dihag.com` | wer `/api/berichte` sehen darf |
+| `ADMIN_UPNS` | `administrator@dihag.com` | darf immer verwalten, kann sich nicht aussperren |
+| `RECHTE_STORAGE` | – | optional: eigenes Speicherkonto für die Regeln; sonst `AzureWebJobsStorage` |
 
 > **CORS steht an zwei Stellen, beide werden gebraucht.** Die
 > **Plattform-CORS-Liste** der Function App muss die Adressen des Frontends
@@ -125,7 +162,12 @@ npm test
 (Node 22+ nimmt kein Verzeichnis mehr entgegen, deshalb das Muster
 `node --test test/*.test.js` im Skript.)
 
-26 Tests, ohne Netz, ohne Azure, ohne Mandanten:
+55 Tests, ohne Netz, ohne Azure, ohne Mandanten:
+
+- **Regelauswertung** (`test/rechte.test.js`): Eingabeprüfung je Typ, Treffer
+  über UPN/Objekt-Id/Domäne (inklusive der Falle, dass `nichtdihag.com` nicht
+  auf `dihag.com` passen darf), Zusammenfassen mehrerer Treffer, und vor allem:
+  ohne Regeln gilt die Domänenregelung, **ab der ersten Regel gilt nur noch sie**.
 
 - **Endpunkte** (`test/api.test.js`): `@azure/functions` und `fetch` sind
   Attrappen, die Handler laufen echt. Geprüft werden unter anderem: ohne
@@ -137,3 +179,7 @@ npm test
 - **Ausweiskontrolle** (`test/entra.test.js`): gegen selbst erzeugte Schlüssel –
   fremd signiert, nachträglich verändert, `alg: none`, abgelaufen, fremder
   Mandant, fehlender Bereich.
+
+Die Endpunkt-Tests decken auch die Rechteschicht ab: Regeln greifen sofort,
+eine Gruppenregel gibt frei, ohne Treffer gibt es 403 **ohne** Power BI zu
+fragen, ungültige Eingaben werden abgewiesen, und der Aussperr-Schutz hält.

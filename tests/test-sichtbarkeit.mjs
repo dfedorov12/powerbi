@@ -3,7 +3,11 @@
 
    Die Browserdateien sind reine Skripte ohne Modulsystem; sie werden hier
    gelesen und in einer Funktion ausgewertet. So testet der Lauf genau den
-   Code, der auch ausgeliefert wird – keine Kopie davon.                   */
+   Code, der auch ausgeliefert wird – keine Kopie davon.
+
+   Wer welchen Bericht sehen darf, entscheidet der Broker; hier wird nur
+   geprüft, dass die Oberfläche sich an dessen Antwort hält. Die Regellogik
+   selbst hat eigene Tests in broker/test/rechte.test.js.                   */
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -18,39 +22,37 @@ const lies = p => readFileSync(join(wurzel, p), "utf8");
 const CONFIG = new Function(lies("js/config.js") + "; return PBI_CONFIG;")();
 const DATA = new Function("PBI_CONFIG", lies("js/data.js") + "; return DATA;")(CONFIG);
 
-const b = (ueber = {}) => ({
-  key: "x", name: "X", domains: "*", minRolle: "viewer", aktiv: true, ...ueber
+const b = (ueber = {}) => ({ key: "x", name: "X", aktiv: true, ...ueber });
+
+test("freigegebener Bericht ist sichtbar", () => {
+  assert.strictEqual(DATA.istSichtbar(b(), ["x"]), true);
 });
 
-test("Standardbericht ist für viewer sichtbar", () => {
-  assert.strictEqual(DATA.istSichtbar(b(), "viewer", "dihag.com"), true);
+test("nicht freigegebener Bericht ist unsichtbar", () => {
+  assert.strictEqual(DATA.istSichtbar(b(), ["andere"]), false);
+  assert.strictEqual(DATA.istSichtbar(b(), []), false);
 });
 
-test("inaktiver Bericht ist für niemanden sichtbar", () => {
-  assert.strictEqual(DATA.istSichtbar(b({ aktiv: false }), "admin", "dihag.com"), false);
+test("inaktiver Bericht ist auch mit Freigabe unsichtbar", () => {
+  assert.strictEqual(DATA.istSichtbar(b({ aktiv: false }), ["x"]), false);
 });
 
-test("Mindestrolle wird beachtet", () => {
-  const e = b({ minRolle: "editor" });
-  assert.strictEqual(DATA.istSichtbar(e, "viewer", "dihag.com"), false);
-  assert.strictEqual(DATA.istSichtbar(e, "editor", "dihag.com"), true);
-  assert.strictEqual(DATA.istSichtbar(e, "admin", "dihag.com"), true);
+test("die Reihenfolge steuert die Reiterleiste", () => {
+  const merk = CONFIG.berichte;
+  CONFIG.berichte = [
+    b({ key: "spaet", name: "Spät", reihenfolge: 20 }),
+    b({ key: "frueh", name: "Früh", reihenfolge: 10 }),
+    b({ key: "aus",   name: "Aus",  reihenfolge: 5, aktiv: false })
+  ];
+  DATA.ctx.erlaubt = ["spaet", "frueh", "aus"];
+  assert.deepStrictEqual(DATA.sichtbareBerichte().map(x => x.key), ["frueh", "spaet"]);
+  CONFIG.berichte = merk;
+  DATA.ctx.erlaubt = [];
 });
 
-test("Domänenliste schließt fremde Domänen aus", () => {
-  const e = b({ domains: "dihag.com; gienanth.de" });
-  assert.strictEqual(DATA.istSichtbar(e, "viewer", "dihag.com"), true);
-  assert.strictEqual(DATA.istSichtbar(e, "viewer", "gienanth.de"), true);
-  assert.strictEqual(DATA.istSichtbar(e, "viewer", "example.com"), false);
-});
-
-test("Sternchen und leere Liste bedeuten: alle Domänen", () => {
-  assert.strictEqual(DATA.istSichtbar(b({ domains: "*" }), "viewer", "example.com"), true);
-  assert.strictEqual(DATA.istSichtbar(b({ domains: "" }), "viewer", "example.com"), true);
-});
-
-test("unbekannte Rolle sieht nichts", () => {
-  assert.strictEqual(DATA.istSichtbar(b(), "gast", "dihag.com"), false);
+test("nameVon liefert den Anzeigenamen, sonst den Schlüssel", () => {
+  assert.strictEqual(DATA.nameVon(CONFIG.berichte[0].key), CONFIG.berichte[0].name);
+  assert.strictEqual(DATA.nameVon("unbekannt"), "unbekannt");
 });
 
 test("jeder Bericht in der Konfiguration hat einen Schlüssel und einen Namen", () => {
@@ -70,4 +72,12 @@ test("die Konfiguration enthält keine Arbeitsbereichs- oder Bericht-IDs", () =>
   const roh = JSON.stringify(CONFIG.berichte);
   assert.ok(!/workspaceid|reportid/i.test(roh),
     "In js/config.js stehen Power-BI-IDs – die gehören in PBI_BERICHTE im Broker.");
+});
+
+test("die Konfiguration enthält keine eigene Rechtelogik mehr", () => {
+  // Zwei Quellen für dieselbe Frage sind eine zu viel: die Rechte liegen
+  // im Broker, nicht hier.
+  const roh = JSON.stringify(CONFIG);
+  assert.ok(!/permlist|hauptadmins|minrolle/i.test(roh),
+    "In js/config.js stehen wieder Rechte-Felder – die gehören in den Broker.");
 });

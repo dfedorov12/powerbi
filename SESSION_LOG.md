@@ -288,3 +288,65 @@ Azure CLI entfernt (alles nachgeprueft).
 **Auf Wunsch von Denis:** Fussleiste entschlackt – „nur Ansicht", der Verweis
 auf „Rund um den Job" und „Support" sind raus, es bleibt
 „DIHAG Foundry Group · Berichte aus Power BI".
+
+## 2026-09-04 (5): Rechteschicht davor
+
+**Denis:** „Jetzt will ich eine Schicht davor, die Berechtigung in den
+Einstellungen ermoeglichen als Administrator. Kannst auch abgucken, nach User,
+Verteilergruppe, Sicherheitsgruppe, Domaene."
+
+**Abgeschaut** bei `besuchermanagement`: dort werden Gruppenfreigaben ueber
+`POST /me/getMemberGroups` mit `securityEnabledOnly: false` aufgeloest – das
+liefert **alle** Gruppentypen transitiv (Sicherheits-, Microsoft-365-,
+Verteiler-, dynamische) und kommt mit `User.Read` aus, also ohne
+Administratorzustimmung. Die Oberflaeche lehnt sich an
+`rundumdenjob/js/set-rechte.js` an (Karten, Tabellen, Merkmalspillen).
+
+**Tragende Entscheidung:** Die Regeln liegen **im Broker**, nicht im Frontend
+und nicht in einer SharePoint-Liste. Eine Pruefung im Frontend waere nur
+Anzeige – wer die Entwicklerkonsole oeffnet, kaeme sonst an jeden Bericht der
+Freigabeliste. Ablage: Azure Table Storage (`Rechte`) im ohnehin vorhandenen
+Speicherkonto der Function App.
+
+**Modell:** Regel = Prinzipal (`benutzer` | `gruppe` | `domaene`) + Berichte
+(`*` oder Liste) + `admin` + `aktiv`. Gruppen werden ueber die **Objekt-Id**
+verglichen, nie ueber den Namen – ein umbenannter Anzeigename darf keine
+Berechtigung still verschieben. Solange keine Regel existiert, gilt die
+bisherige Domaenenregelung; ab der ersten Regel gilt ausschliesslich sie.
+
+**Neu:**
+- `broker/src/lib/rechte.js` (reine Auswertung), `broker/src/lib/speicher.js`
+  (Table Storage, Transaktion je 100 Vorgaenge, 30 s Zwischenspeicher).
+- Endpunkte `GET /api/zugriff`, `GET/PUT /api/rechte`; Durchsetzung in
+  `/api/embed-token`.
+- `js/set-rechte.js` (Einstellungen), Kopf-Schaltflaeche, Formular mit
+  Gruppenauswahl aus den eigenen Gruppen.
+- 29 zusaetzliche Tests (jetzt 55 im Broker, 8 im Frontend).
+
+**Aufgeraeumt:** Die alte, jetzt doppelte Rechtelogik ist raus – `AppPermissions`,
+`permList`, `minRolle`, `domains`, `hauptAdmins` in `js/config.js` und der
+SharePoint-Teil von `js/graph.js`. Zwei Quellen fuer dieselbe Frage sind eine
+zu viel. Ein Test wacht darueber, dass sie nicht zurueckkommen.
+
+**Live geprueft:** Token traegt 35 Gruppen (kein Ueberlauf); Schreiben, Lesen,
+Eingabepruefung und eine **Gruppenregel** funktionieren gegen den echten
+Broker – mit voruebergehend entferntem `ADMIN_UPNS`, damit die Regeln
+ueberhaupt zum Zug kommen.
+
+### Zwei eigene Fehler, die der Lauf aufgedeckt hat
+
+1. **„Viewer genuegt" war falsch.** Power BI merkt sich
+   Berechtigungsentscheidungen einige Minuten. Der Test direkt nach dem
+   Herabstufen von *Member* auf *Viewer* lief noch gegen den alten Stand und
+   meldete 200. Minuten spaeter scheiterte `GenerateToken` reproduzierbar mit
+   401. Bericht und Semantikmodell brauchen **Member**; nur der
+   Lakehouse-Arbeitsbereich kommt mit *Viewer* aus. Korrigiert und dokumentiert –
+   nach Rechteaenderungen muss man warten und erneut pruefen.
+2. **Zwei Testregeln blieben produktiv stehen.** Das Aufraeumen am Ende des
+   Gruppentests schickte `regeln: []`, wurde aber vom eigenen Aussperr-Schutz
+   mit 400 abgewiesen (der Aufrufer war nur ueber eine Regel Administrator) –
+   und die Antwort ging nach `Out-Null`, der Fehler blieb unsichtbar. Damit war
+   kurzzeitig deny-by-default aktiv. Aufgefallen ist es nur, weil
+   `/api/health` seither die Regelzahl mitmeldet. Direkt in der Tabelle
+   entfernt, Stand wieder 0. Lehre: Rueckgaben von Aufraeumschritten pruefen,
+   nicht verwerfen.

@@ -94,11 +94,25 @@ async function pruefe(authHeader, cfg) {
   if (cfg.scope && !scopes.includes(cfg.scope))
     throw new TokenFehler(`Der Bereich ${cfg.scope} fehlt im Ausweis`);
 
+  // Gruppenmitgliedschaften kommen aus dem Token selbst (die Registrierung
+  // muss dafür groupMembershipClaims = "All" setzen). Bei sehr vielen
+  // Mitgliedschaften lässt Entra den Anspruch weg und verweist stattdessen
+  // auf Graph – dann steht hier `gruppenUeberlauf`, und gruppenbasierte
+  // Regeln greifen nicht mehr. Das wird gemeldet, nicht stillschweigend
+  // als „keine Gruppen“ ausgelegt.
+  const gruppen = Array.isArray(nutz.groups)
+    ? nutz.groups.map(g => String(g).toLowerCase())
+    : [];
+  const gruppenUeberlauf = !nutz.groups &&
+    Boolean(nutz._claim_names || nutz._claim_sources || nutz.hasgroups);
+
   return {
     upn: String(nutz.upn || nutz.preferred_username || nutz.unique_name || "").toLowerCase(),
     name: nutz.name || "",
     oid: nutz.oid || "",
-    scopes
+    scopes,
+    gruppen,
+    gruppenUeberlauf
   };
 }
 

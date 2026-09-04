@@ -1,11 +1,13 @@
 "use strict";
 
 /* Token-Broker – die einzige Stelle, an der das Geheimnis des Dienstusers
-   liegt. Drei Endpunkte:
+   liegt. Endpunkte:
 
-     GET /api/health        Lebenszeichen, ohne Anmeldung
-     GET /api/embed-token   Einbettungs-Token für einen freigegebenen Bericht
-     GET /api/berichte      Was der Dienstuser sieht (nur Administratoren)
+     GET     /api/health       Lebenszeichen, ohne Anmeldung
+     GET     /api/embed-token  Einbettungs-Token für einen freigegebenen Bericht
+     GET     /api/zugriff      Was darf ich sehen, bin ich Administrator?
+     GET/PUT /api/rechte       Zugriffsregeln lesen und ersetzen (Administratoren)
+     GET     /api/berichte     Was der Dienstuser sieht (Administratoren)
 
    Grundregeln:
      - Aufrufer müssen ein gültiges Entra-Token dieses Mandanten für die
@@ -14,11 +16,16 @@
        Bericht-IDs kommen niemals vom Aufrufer, sondern immer aus dieser
        Freigabeliste – sonst könnte man sich über die Entwicklerkonsole ein
        Token für einen beliebigen Bericht des Dienstusers ausstellen lassen.
-     - Ausgegeben wird ausschließlich accessLevel "View".                    */
+     - Zusätzlich muss eine Zugriffsregel greifen (Benutzer, Gruppe oder
+       Domäne). Diese Prüfung gehört hierher und nicht ins Frontend: dort
+       wäre sie nur Anzeige, hier ist sie verbindlich.
+     - Ausgegeben wird ausschließlich lesender Zugriff (allowEdit: false).   */
 
 const { app } = require("@azure/functions");
 const { pruefe, TokenFehler } = require("../lib/entra");
 const PBI = require("../lib/powerbi");
+const RECHTE = require("../lib/rechte");
+const SPEICHER = require("../lib/speicher");
 
 /* ── Einstellungen aus der Umgebung ───────────────────────────────── */
 
@@ -65,7 +72,7 @@ function corsKopf(request) {
   if (herkunft && (erlaubt.includes("*") || erlaubt.includes(herkunft.toLowerCase()))) {
     h["Access-Control-Allow-Origin"] = herkunft;
     h["Access-Control-Allow-Headers"] = "authorization,content-type";
-    h["Access-Control-Allow-Methods"] = "GET,OPTIONS";
+    h["Access-Control-Allow-Methods"] = "GET,PUT,OPTIONS";
     h["Access-Control-Max-Age"] = "3600";
   }
   return h;
@@ -101,6 +108,31 @@ async function aufrufer(request) {
   return wer;
 }
 
+/** Was diese Person darf – aus den gespeicherten Regeln.
+ *  Solange noch keine Regel existiert, gilt die bisherige Regelung über
+ *  ERLAUBTE_DOMAENEN (siehe rechte.js), damit die Umstellung niemanden
+ *  aussperrt. */
+async function zugriffFuer(wer) {
+  const regeln = await SPEICHER.lesen();
+  return RECHTE.auswerten(regeln, wer, {
+    hauptAdmins: liste(process.env.ADMIN_UPNS),
+    standardDomaenen: liste(process.env.ERLAUBTE_DOMAENEN)
+  });
+}
+
+/** Aufrufer prüfen und zusätzlich verlangen, dass er die Regeln verwalten darf. */
+async function verwalter(request) {
+  const wer = await aufrufer(request);
+  const z = await zugriffFuer(wer);
+  if (!z.admin) {
+    const e = new Error("Diese Ansicht ist Administratoren vorbehalten");
+    e.status = 403;
+    e.art = "kein_admin";
+    throw e;
+  }
+  return { wer, zugriff: z };
+}
+
 function fehlerAntwort(request, e, context) {
   const status = e.status || 500;
   if (status >= 500) context.error(e.message, e.detail || "");
@@ -126,6 +158,7 @@ app.http("health", {
       eingerichtet: Boolean(c.tenantId && c.clientId && c.clientSecret
         && frontendCfg().clientId),
       berichte: freigaben().map(b => b.key),
+      regeln: await SPEICHER.lesen().then(r => r.length).catch(() => null),
       zeit: new Date().toISOString()
     });
   }
@@ -148,6 +181,21 @@ app.http("embedToken", {
         const e = new Error("Unbekannter Bericht: " + key);
         e.status = 404;
         e.art = "unbekannter_bericht";
+        throw e;
+      }
+
+      // Zweite Hürde nach der Freigabeliste: Darf genau diese Person diesen
+      // Bericht sehen? Das entscheidet sich hier und nicht im Frontend – sonst
+      // käme jeder mit der Entwicklerkonsole an jeden freigegebenen Bericht.
+      const z = await zugriffFuer(wer);
+      if (!RECHTE.darfBericht(z, key)) {
+        const e = new Error("Für diesen Bericht ist kein Zugriff freigegeben");
+        e.status = 403;
+        e.art = "keine_freigabe";
+        if (wer.gruppenUeberlauf) {
+          e.detail = "Der Gruppenanspruch fehlt im Token (zu viele "
+            + "Mitgliedschaften) – gruppenbasierte Regeln greifen nicht.";
+        }
         throw e;
       }
 
@@ -183,14 +231,7 @@ app.http("berichte", {
   handler: async (request, context) => {
     if (request.method === "OPTIONS") return vorabfrage(request);
     try {
-      const wer = await aufrufer(request);
-      const admins = liste(process.env.ADMIN_UPNS);
-      if (!admins.includes(wer.upn)) {
-        const e = new Error("Diese Übersicht ist Administratoren vorbehalten");
-        e.status = 403;
-        e.art = "kein_admin";
-        throw e;
-      }
+      await verwalter(request);
 
       const alle = await PBI.alleBerichte(cfg());
       const frei = freigaben();
@@ -201,6 +242,107 @@ app.http("berichte", {
 
       return antwort(request, 200, { berichte: mitSchluessel });
     } catch (e) {
+      return fehlerAntwort(request, e, context);
+    }
+  }
+});
+
+/* ── /api/zugriff ─────────────────────────────────────────────────────
+   Was darf ich sehen? Das Frontend baut daraus seine Reiterleiste und
+   entscheidet, ob es den Einstellungsbereich anzeigt. Verbindlich ist die
+   Prüfung in /api/embed-token – das hier ist die Anzeigeseite davon.     */
+
+app.http("zugriff", {
+  route: "zugriff",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: async (request, context) => {
+    if (request.method === "OPTIONS") return vorabfrage(request);
+    try {
+      const wer = await aufrufer(request);
+      const z = await zugriffFuer(wer);
+      const alle = freigaben().map(b => b.key);
+      return antwort(request, 200, {
+        upn: wer.upn,
+        name: wer.name,
+        admin: z.admin,
+        quelle: z.quelle,
+        berichte: RECHTE.sichtbareBerichte(z, alle),
+        gruppen: wer.gruppen.length,
+        gruppenUeberlauf: wer.gruppenUeberlauf
+      });
+    } catch (e) {
+      return fehlerAntwort(request, e, context);
+    }
+  }
+});
+
+/* ── /api/rechte ──────────────────────────────────────────────────────
+   GET  liefert alle Regeln, PUT ersetzt sie vollständig. Ein vollständiger
+   Austausch statt einzelner Vorgänge: die Regelmenge ist klein, und so kann
+   die Oberfläche nicht aus Versehen einen halben Stand hinterlassen.      */
+
+app.http("rechte", {
+  route: "rechte",
+  methods: ["GET", "PUT", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: async (request, context) => {
+    if (request.method === "OPTIONS") return vorabfrage(request);
+    try {
+      const { wer } = await verwalter(request);
+
+      if (request.method === "GET") {
+        return antwort(request, 200, {
+          regeln: await SPEICHER.lesen(true),
+          berichte: freigaben().map(b => b.key),
+          hauptAdmins: liste(process.env.ADMIN_UPNS),
+          standardDomaenen: liste(process.env.ERLAUBTE_DOMAENEN)
+        });
+      }
+
+      const koerper = await request.json().catch(() => null);
+      if (!koerper || !Array.isArray(koerper.regeln)) {
+        const e = new Error("Es wurde keine Regelliste mitgeschickt");
+        e.status = 400;
+        e.art = "eingabe";
+        throw e;
+      }
+
+      const bekannt = new Set(freigaben().map(b => b.key));
+      const geprueft = koerper.regeln.map((r, i) => {
+        const n = RECHTE.normalisiere(r, i);
+        const unbekannt = n.berichte.filter(b => b !== "*" && !bekannt.has(b));
+        if (unbekannt.length) {
+          const e = new Error(`Regel ${i + 1}: unbekannter Bericht `
+            + `„${unbekannt.join(", ")}“ – erlaubt sind: ${[...bekannt].join(", ")} oder *`);
+          e.status = 400;
+          e.art = "eingabe";
+          throw e;
+        }
+        return n;
+      });
+
+      // Sich selbst die Verwaltung zu entziehen ist fast immer ein Versehen.
+      // Haupt-Administratoren aus der Umgebung bleiben ohnehin handlungsfähig.
+      const hauptAdmins = liste(process.env.ADMIN_UPNS);
+      if (!hauptAdmins.includes(wer.upn)) {
+        const nachher = RECHTE.auswerten(geprueft, wer, { hauptAdmins });
+        if (!nachher.admin) {
+          const e = new Error("Mit diesen Regeln würden Sie sich selbst die "
+            + "Verwaltung entziehen. Bitte eine Regel behalten, die Ihnen "
+            + "„darf verwalten“ gibt.");
+          e.status = 400;
+          e.art = "aussperrung";
+          throw e;
+        }
+      }
+
+      const gespeichert = await SPEICHER.schreiben(geprueft, wer.upn);
+      context.log(`Regeln gespeichert von ${wer.upn}: ${gespeichert.length}`);
+      return antwort(request, 200, { regeln: gespeichert });
+    } catch (e) {
+      // Fehler aus normalisiere() sind Eingabefehler, keine Serverfehler.
+      if (!e.status && e instanceof Error) { e.status = 400; e.art = "eingabe"; }
       return fehlerAntwort(request, e, context);
     }
   }

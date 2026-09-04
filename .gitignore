@@ -13,4 +13,4 @@ Thumbs.db
 .DS_Store
 
 # Rendertest mit echtem Einbettungs-Token - gehoert nie ins Repo
-_test-embed.html
+_test-*.html

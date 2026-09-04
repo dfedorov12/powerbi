@@ -238,3 +238,113 @@ footer {
   .hdr-user .who { display: none; }
   #berichtRahmen { min-height: calc(100vh - 240px); }
 }
+
+/* ══ Einstellungen · Berechtigungen ═══════════════════════════════════ */
+
+#rechte {
+  position: fixed; inset: 0; z-index: 9996;
+  background: rgba(26,38,68,.45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px; overflow: auto;
+}
+.einst-box {
+  background: var(--bg); border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  width: min(1080px, 100%); max-height: 92vh; overflow: auto;
+}
+.einst-kopf {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 16px 22px;
+  background: var(--navy); color: #fff;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.einst-kopf h3 { margin: 0; font-size: 17px; }
+
+.karte {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px 20px; margin: 16px 20px;
+}
+.karte h4 { margin: 0 0 8px; color: var(--navy); font-size: 15.5px; }
+.karte-kopf {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.karte-kopf h4 { margin: 0; }
+
+.hinweis { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.warn {
+  background: #fff8e6; border: 1px solid #f0c987; color: #7a5200;
+  padding: 12px 14px; border-radius: 10px; margin: 16px 20px; font-size: 14px;
+}
+.fehler {
+  background: var(--red-bg); color: var(--red);
+  padding: 10px 12px; border-radius: 8px; font-size: 13.5px; margin: 12px 0 0;
+}
+.leer { color: var(--muted); }
+.rechts { text-align: right; white-space: nowrap; }
+.brechen { word-break: break-all; }
+
+/* Tabellen */
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th, .tbl td {
+  text-align: left; padding: 8px 10px;
+  border-bottom: 1px solid var(--border-2, #eaeff5); vertical-align: top;
+}
+.tbl th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.tbl tbody tr:hover { background: #f7fafd; }
+
+/* Merkmale */
+.pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: #eef3fa; color: var(--azur);
+}
+.pill.benutzer { background: #eef3fa; color: var(--azur); }
+.pill.gruppe   { background: #e9f0e9; color: #2b6b34; }
+.pill.domaene  { background: #f2eefa; color: #5b3fa0; }
+.pill.orange   { background: #fdf0e0; color: #a35c00; }
+.pill.green    { background: #e6f4ea; color: var(--green, #1e7e34); }
+.pill.gray     { background: #eef1f5; color: var(--muted); }
+
+/* Formular */
+.form-kopf h4 { margin: 0 0 12px; }
+.felder { display: grid; gap: 12px; }
+.felder label { display: grid; gap: 4px; font-size: 13.5px; font-weight: 600; }
+.felder label small { font-weight: 400; color: var(--muted); }
+.felder input[type="text"], .felder input:not([type]), .felder select {
+  font: inherit; font-size: 14px; font-weight: 400;
+  padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fff; color: var(--text); width: 100%;
+}
+.felder input:focus, .felder select:focus {
+  outline: 2px solid var(--lichtblau); outline-offset: 1px;
+}
+.felder fieldset {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px 14px;
+}
+.felder legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
+.felder .ankreuz {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 400; font-size: 14px;
+}
+.felder .ankreuz input { width: auto; }
+.felder .ankreuz small { color: var(--muted); }
+#fGruppen { display: grid; gap: 8px; }
+#fGruppen small { color: var(--muted); font-size: 12.5px; }
+
+/* Schaltflächen auf hellem Grund */
+.btn.ghost2 {
+  background: transparent; color: var(--azur); border-color: var(--border);
+}
+.btn.ghost2:hover { background: #eef3fa; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.btn[disabled]:hover { background: var(--azur); }
+.btn.sec[disabled]:hover { background: #fff; }
+
+@media (max-width: 780px) {
+  .karte { margin: 12px; padding: 14px; }
+  .warn { margin: 12px; }
+}

@@ -3,12 +3,11 @@
 /* Microsoft-Graph-Helfer – bewusst schlank.
 
    Diese App liest über Graph nur zwei Dinge:
-     1. das eigene Profil (/me)
-     2. optional die zentrale Rechteliste `AppPermissions` auf SharePoint
+     1. das eigene Profil (/me) für die Kopfzeile
+     2. die eigenen Gruppen – als Auswahlhilfe im Einstellungsbereich
 
-   Punkt 2 ist abschaltbar: steht in der Konfiguration kein `permList`, wird
-   Graph gar nicht für SharePoint benutzt und die App kommt mit dem Bereich
-   `User.Read` aus – der braucht keine Administratorzustimmung.            */
+   Beides kommt mit dem Bereich `User.Read` aus, der keine
+   Administratorzustimmung braucht. Die Rechte selbst liegen im Broker.    */
 
 const GRAPH = (() => {
 
@@ -51,35 +50,51 @@ const GRAPH = (() => {
     return out;
   }
 
-  const _cache = { siteIds: {}, listIds: {} };
-
-  /** @returns {Promise<string|null>} null, wenn die Site nicht lesbar ist */
-  async function siteId(pfad) {
-    if (_cache.siteIds[pfad]) return _cache.siteIds[pfad];
+  /** Eigene Gruppen als Auswahlhilfe für den Einstellungsbereich.
+   *
+   *  `/me/getMemberGroups` mit `securityEnabledOnly: false` liefert **alle**
+   *  Gruppentypen transitiv – Sicherheits-, Microsoft-365-, Verteiler- und
+   *  dynamische Gruppen – und kommt mit `User.Read` aus. Es liefert allerdings
+   *  nur Objekt-Ids. Die Namen holt `/me/memberOf`; schlägt das mangels
+   *  Berechtigung fehl, bleiben die Ids, und die Oberfläche sagt das auch.
+   *
+   *  @returns {Promise<{id:string,name:string,art:string}[]>} */
+  async function meineGruppen() {
+    const ids = new Set();
     try {
-      const s = await call("/sites/" + pfad);
-      _cache.siteIds[pfad] = s.id;
-      return s.id;
-    } catch { return null; }
-  }
+      const r = await call("/me/getMemberGroups", {
+        method: "POST",
+        body: JSON.stringify({ securityEnabledOnly: false })
+      });
+      (r?.value || []).forEach(g => ids.add(String(g).toLowerCase()));
+    } catch (e) {
+      const err = new Error("Gruppen konnten nicht gelesen werden: " + e.message);
+      err.status = e.status;
+      throw err;
+    }
 
-  /** @returns {Promise<string|null>} null, wenn die Liste fehlt */
-  async function listId(sid, name) {
-    const k = sid + "|" + name;
-    if (_cache.listIds[k]) return _cache.listIds[k];
+    const namen = new Map();
     try {
-      const l = await call(`/sites/${sid}/lists/${encodeURIComponent(name)}`);
-      _cache.listIds[k] = l.id;
-      return l.id;
-    } catch { return null; }
+      const roh = await callAll("/me/memberOf?$select=id,displayName,mail,"
+        + "groupTypes,securityEnabled,mailEnabled&$top=999");
+      for (const g of roh) {
+        if (!g.id) continue;
+        namen.set(String(g.id).toLowerCase(), {
+          name: g.displayName || "",
+          art: (g.groupTypes || []).includes("Unified") ? "Microsoft 365"
+             : (g.securityEnabled && !g.mailEnabled) ? "Sicherheitsgruppe"
+             : (g.mailEnabled && !g.securityEnabled) ? "Verteilergruppe"
+             : g.securityEnabled ? "Sicherheitsgruppe" : "Gruppe"
+        });
+      }
+    } catch { /* nur die Namen fehlen dann */ }
+
+    return [...ids].map(id => ({
+      id,
+      name: namen.get(id)?.name || "",
+      art: namen.get(id)?.art || ""
+    })).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, "de"));
   }
 
-  /** Alle Einträge einer Liste als flache Objekte (nur die Felder). */
-  async function listItems(sid, lid) {
-    const rows = await callAll(
-      `/sites/${sid}/lists/${lid}/items?expand=fields&$top=999`);
-    return rows.map(r => ({ id: r.id, ...(r.fields || {}) }));
-  }
-
-  return { call, callAll, siteId, listId, listItems };
+  return { call, callAll, meineGruppen };
 })();

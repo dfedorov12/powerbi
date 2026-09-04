@@ -104,11 +104,21 @@ global.fetch = async (url, opts = {}) => {
 /* ── Handler einsammeln ──────────────────────────────────────────────── */
 
 const registriert = new Map();
+
+// Regelspeicher als Attrappe: die echte Ablage liegt in Azure Table Storage,
+// die Auswertung soll hier trotzdem vollstaendig durchlaufen.
+const ablage = { regeln: [] };
+const speicherAttrappe = {
+  lesen: async () => ablage.regeln,
+  schreiben: async (regeln) => { ablage.regeln = regeln; return regeln; }
+};
+
 const echtesLaden = Module._load;
 Module._load = function (anfrage, ...rest) {
   if (anfrage === "@azure/functions") {
     return { app: { http: (name, opt) => registriert.set(opt.route || name, opt) } };
   }
+  if (anfrage === "../lib/speicher") return speicherAttrappe;
   return echtesLaden.call(this, anfrage, ...rest);
 };
 require("../src/functions/api");
@@ -117,15 +127,21 @@ Module._load = echtesLaden;
 const kontext = { log: () => {}, warn: () => {}, error: () => {} };
 
 function ruf(route, { method = "GET", ausweis = null,
-                      herkunft = "https://dfedorov12.github.io", query = {} } = {}) {
+                      herkunft = "https://dfedorov12.github.io", query = {},
+                      koerper = null } = {}) {
   const kopf = new Headers();
   if (ausweis) kopf.set("authorization", "Bearer " + ausweis);
   if (herkunft) kopf.set("origin", herkunft);
-  const request = { method, headers: kopf, query: new URLSearchParams(query) };
+  const request = {
+    method, headers: kopf, query: new URLSearchParams(query),
+    json: async () => { if (koerper === null) throw new Error("kein Koerper"); return koerper; }
+  };
   return registriert.get(route).handler(request, kontext);
 }
 
-test.beforeEach(() => { pbiFehler = null; aufrufe.length = 0; });
+const GRUPPE = "8f14e45f-ceea-467a-9b2c-6f0e2c1a3b4d";
+
+test.beforeEach(() => { pbiFehler = null; aufrufe.length = 0; ablage.regeln = []; });
 
 /* ── health ──────────────────────────────────────────────────────────── */
 
@@ -256,4 +272,102 @@ test("Administratoren sehen alle Berichte mit Freigabe-Schlüssel", async () => 
   assert.strictEqual(l.find(b => b.reportId === RID).key, "bericht1");
   assert.strictEqual(l.find(b => b.reportId === "rep-4444").key, "",
     "nicht freigegebene Berichte duerfen keinen Schluessel tragen");
+});
+
+/* ── Zugriffsregeln ──────────────────────────────────────────────────── */
+
+test("zugriff meldet ohne Regeln den Standardzugriff", async () => {
+  const r = await ruf("zugriff", { ausweis: token() });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.jsonBody.quelle, "standard");
+  assert.strictEqual(r.jsonBody.admin, false);
+  assert.deepStrictEqual(r.jsonBody.berichte, ["bericht1"]);
+});
+
+test("zugriff meldet den Haupt-Administrator als solchen", async () => {
+  const r = await ruf("zugriff", { ausweis: token({ upn: "administrator@dihag.com" }) });
+  assert.strictEqual(r.jsonBody.admin, true);
+  assert.strictEqual(r.jsonBody.quelle, "hauptadmin");
+});
+
+test("die Regelverwaltung ist ohne Verwaltungsrecht gesperrt", async () => {
+  const r = await ruf("rechte", { ausweis: token() });
+  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.jsonBody.art, "kein_admin");
+});
+
+test("Haupt-Administrator darf die Regeln lesen", async () => {
+  const r = await ruf("rechte", { ausweis: token({ upn: "administrator@dihag.com" }) });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(r.jsonBody.berichte, ["bericht1"]);
+  assert.deepStrictEqual(r.jsonBody.regeln, []);
+});
+
+test("Regeln werden gespeichert und wirken sofort", async () => {
+  const p = await ruf("rechte", {
+    method: "PUT", ausweis: token({ upn: "administrator@dihag.com" }),
+    koerper: { regeln: [{ typ: "gruppe", wert: GRUPPE, name: "Controlling",
+                          berichte: ["bericht1"] }] }
+  });
+  assert.strictEqual(p.status, 200);
+  assert.strictEqual(p.jsonBody.regeln.length, 1);
+
+  // Ohne die Gruppe: kein Zugriff mehr, obwohl die Domaene stimmt.
+  const ohne = await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
+  assert.strictEqual(ohne.status, 403);
+  assert.strictEqual(ohne.jsonBody.art, "keine_freigabe");
+  assert.strictEqual(aufrufe.length, 0, "Power BI darf gar nicht gefragt werden");
+
+  // Mit der Gruppe: Zugriff.
+  const mit = await ruf("embed-token", {
+    ausweis: token({ groups: [GRUPPE] }), query: { bericht: "bericht1" }
+  });
+  assert.strictEqual(mit.status, 200);
+});
+
+test("PUT weist einen unbekannten Bericht ab", async () => {
+  const r = await ruf("rechte", {
+    method: "PUT", ausweis: token({ upn: "administrator@dihag.com" }),
+    koerper: { regeln: [{ typ: "domaene", wert: "dihag.com", berichte: ["gibtsnicht"] }] }
+  });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.jsonBody.fehler, /unbekannter Bericht/);
+});
+
+test("PUT weist eine Gruppe ohne Objekt-Id ab", async () => {
+  const r = await ruf("rechte", {
+    method: "PUT", ausweis: token({ upn: "administrator@dihag.com" }),
+    koerper: { regeln: [{ typ: "gruppe", wert: "Fabric_Viewer", berichte: ["*"] }] }
+  });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.jsonBody.fehler, /Objekt-Id/);
+});
+
+test("PUT verhindert, dass man sich selbst aussperrt", async () => {
+  // denis ist Administrator nur ueber eine Regel, nicht ueber ADMIN_UPNS.
+  ablage.regeln = [{ id: "r1", typ: "benutzer", wert: "denis@dihag.com",
+                     berichte: ["*"], admin: true, aktiv: true, name: "", notiz: "" }];
+  const r = await ruf("rechte", {
+    method: "PUT", ausweis: token(),
+    koerper: { regeln: [{ typ: "domaene", wert: "dihag.com", berichte: ["bericht1"] }] }
+  });
+  assert.strictEqual(r.status, 400);
+  assert.strictEqual(r.jsonBody.art, "aussperrung");
+  assert.strictEqual(ablage.regeln.length, 1, "der alte Stand bleibt unangetastet");
+});
+
+test("ein Administrator laut Regel darf die Regeln lesen", async () => {
+  ablage.regeln = [{ id: "r1", typ: "domaene", wert: "dihag.com",
+                     berichte: ["*"], admin: true, aktiv: true, name: "", notiz: "" }];
+  const r = await ruf("rechte", { ausweis: token() });
+  assert.strictEqual(r.status, 200);
+});
+
+test("PUT ohne Regelliste wird abgewiesen", async () => {
+  const r = await ruf("rechte", {
+    method: "PUT", ausweis: token({ upn: "administrator@dihag.com" }),
+    koerper: { irgendwas: true }
+  });
+  assert.strictEqual(r.status, 400);
+  assert.strictEqual(r.jsonBody.art, "eingabe");
 });

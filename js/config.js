@@ -21,7 +21,8 @@ const PBI_CONFIG = {
 
   // Delegierte Berechtigungen. Bewusst nur User.Read: das erlaubt jede Person
   // im Tenant selbst zu bestätigen, es braucht keine Administratorzustimmung.
-  // Wird `permList` unten gesetzt, muss "Sites.Read.All" ergänzt werden.
+  // Reicht auch für /me/getMemberGroups – damit findet der Einstellungsbereich
+  // die eigenen Gruppen, ohne dass jemand zustimmen muss.
   scopes: ["User.Read"],
 
   // Eigener API-Bereich der Frontend-Registrierung. Damit weist sich die Seite
@@ -42,16 +43,15 @@ const PBI_CONFIG = {
      Das Frontend kennt die IDs bewusst nicht: so kann niemand über die
      Entwicklerkonsole ein Token für einen fremden Bericht anfordern.
 
-     `domains`   "*" oder Liste von E-Mail-Domänen, die den Bericht sehen
-     `minRolle`  viewer | editor | admin  (siehe Rechteliste unten)
-     `aktiv`     false blendet den Bericht aus, ohne ihn zu löschen        */
+     Hier steht nur, wie ein Bericht **heißt und aussieht**. Wer ihn sehen
+     darf, entscheiden die Regeln im Broker (siehe unten).
+
+     `aktiv`  false blendet den Bericht für alle aus, ohne ihn zu löschen  */
   berichte: [
     {
       key: "bericht1",
       name: "Aktuelle DIHAG Geschäftspartner",
       beschreibung: "Arbeitsbereich DEV_Reporting_Central",
-      domains: "*",
-      minRolle: "viewer",
       aktiv: true,
       reihenfolge: 10,
       // Anzeigeoptionen je Bericht
@@ -60,19 +60,18 @@ const PBI_CONFIG = {
     }
   ],
 
-  /* ── Rechteliste (optional) ───────────────────────────────────────
-     Leer = jede angemeldete Person im Tenant ist `viewer` und sieht alle
-     Berichte mit `minRolle: viewer`. Das kommt ohne Administratorzustimmung
-     aus. Wer feiner steuern will, trägt hier die zentrale Liste ein und
-     ergänzt oben "Sites.Read.All" in `scopes`. */
-  permSite: "dihag.sharepoint.com:/sites/IT",
-  permList: "",                 // z. B. "AppPermissions"
-  appKey:   "powerbi",
-  defaultRole: "viewer",
+  /* ── Wer darf was? ────────────────────────────────────────────────
+     Steht NICHT hier, sondern im Broker: Er beantwortet /api/zugriff und
+     entscheidet bei jedem Einbettungs-Token neu. Gepflegt wird das in der
+     App unter „Einstellungen → Berechtigungen" (nur für Administratoren) –
+     nach Benutzer, Gruppe (Sicherheits-, Microsoft-365-, Verteiler- oder
+     dynamische Gruppe) oder E-Mail-Domäne.
 
-  // Haupt-Administrator: immer Rolle „admin“, unabhängig von der Rechteliste.
-  // Sieht zusätzlich den Diagnosebereich.
-  hauptAdmins: ["administrator@dihag.com", "fedorov@dihag.com"],
+     Warum nicht hier oder in einer SharePoint-Liste wie in den übrigen
+     DIHAG-Apps: Eine Prüfung im Frontend ist nur Anzeige. Wer die
+     Entwicklerkonsole öffnet, käme sonst an jeden Bericht der Freigabeliste.
+     Die Haupt-Administratoren stehen in der Broker-Einstellung ADMIN_UPNS –
+     sie können sich nicht selbst aussperren.                              */
 
   /* ── Laufzeit ─────────────────────────────────────────────────────
      Ein Einbettungs-Token gilt rund eine Stunde. So viele Minuten vor

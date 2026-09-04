@@ -40,6 +40,7 @@
     $("uAvatar").textContent = (c.name || c.email || "?")
       .split(/[ .]/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
     $("btnDiagnose").hidden = !DATA.istAdmin();
+    $("btnEinst").hidden = !DATA.istAdmin();
   }
 
   /* ── Reiterleiste der Berichte ────────────────────────────────────── */
@@ -106,8 +107,15 @@
     const dl = document.createElement("dl");
 
     dl.append(...zeile("Angemeldet", DATA.ctx.email));
-    dl.append(...zeile("Rolle", DATA.ctx.role + " (Quelle: " + DATA.roleInfo.quelle + ")"));
-    if (DATA.roleInfo.fehler) dl.append(...zeile("Hinweis", DATA.roleInfo.fehler));
+    dl.append(...zeile("Verwaltet", DATA.istAdmin() ? "ja" : "nein"));
+    dl.append(...zeile("Zugriff laut Broker",
+      (DATA.ctx.erlaubt.length ? DATA.ctx.erlaubt.join(", ") : "keiner")
+      + " (Quelle: " + DATA.ctx.quelle + ")"));
+    dl.append(...zeile("Gruppen im Token", String(DATA.ctx.gruppen)
+      + (DATA.ctx.gruppenUeberlauf
+        ? " – ÜBERLAUF: der Gruppenanspruch fehlt, gruppenbasierte Regeln greifen nicht"
+        : "")));
+    if (DATA.info.fehler) dl.append(...zeile("Hinweis", DATA.info.fehler));
     dl.append(...zeile("Redirect-URI", AUTH.redirectUri));
     dl.append(...zeile("Broker", C.brokerUrl));
     AUTH.tokenUebersicht().forEach(t => dl.append(...zeile(
@@ -180,8 +188,12 @@
     if (!berichte.length) {
       boot.hidden = true;
       noAccess.hidden = false;
-      $("naMsg").textContent = "Für Ihr Konto (" + DATA.ctx.email + ", Rolle "
-        + DATA.ctx.role + ") ist derzeit kein Bericht freigegeben.";
+      $("naMsg").textContent = "Für Ihr Konto (" + DATA.ctx.email + ") ist derzeit "
+        + "kein Bericht freigegeben."
+        + (DATA.istAdmin() ? " Sie dürfen die Berechtigungen aber verwalten."
+                           : " Ein Administrator kann das unter „Einstellungen → "
+                             + "Berechtigungen“ ändern.");
+      $("naEinst").hidden = !DATA.istAdmin();
       return;
     }
 
@@ -203,6 +215,17 @@
   };
   $("btnDiagnose").onclick = diagnose;
   $("diagZu").onclick = () => { $("diag").hidden = true; };
+  $("btnEinst").onclick = () => RECHTE_UI.oeffnen();
+  $("naEinst").onclick = () => RECHTE_UI.oeffnen();
+  $("rechteZu").onclick = () => RECHTE_UI.schliessen();
+
+  // Nach dem Speichern kann sich der eigene Zugriff geändert haben.
+  document.addEventListener("rechte-geaendert", async () => {
+    const berichte = DATA.sichtbareBerichte();
+    if (!berichte.length) { location.reload(); return; }
+    reiterZeichnen(berichte);
+    if (!berichte.some(b => b.key === aktuell?.key)) await waehle(berichte[0]);
+  });
 
   window.addEventListener("error", ev => {
     if (!boot.hidden && ev?.error) bootFehler("Fehler: " + ev.error.message);
