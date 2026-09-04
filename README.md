@@ -229,18 +229,22 @@ Kapazitätsadministrator mehr ist – seither schlug jede Aktualisierung fehl
 `administrator@dihag.com` übernommen und aktualisiert; **Kapazität und
 Semantikmodelle sind seitdem im Modell sichtbar.**
 
-**Ein Schritt fehlt noch, und der geht nur über die Oberfläche:** Die
-Faktentabellen sind DirectQuery und brauchen eine dauerhaft hinterlegte
-Anmeldung. Per API lässt sich nur ein Zugriffstoken setzen – das genügt für die
-Aktualisierung der Importtabellen, nicht für DirectQuery (`Error obtaining data
-location`). Einmalig im Power-BI-Portal:
+**Die CU-Zahlen bleiben trotzdem im Bericht der Metrik-App** – und das liegt an
+der App, nicht an Anmeldung oder Rechten. Ihre Faktentabellen (`MetricsByItem…`)
+sind DirectQuery und lösen ihre Datenquelle über **dynamische M-Parameter** auf,
+die an die Datenschnitte des Berichts gebunden sind. Über `executeQueries` gibt
+es diesen Berichtskontext nicht; die Abfrage endet dann mit *„Internal Error:
+Error obtaining data location"*. Nachgemessen mit fünf Abfrageformen
+(TREATAS auf `Capacities[capacityId]`, auf `PremiumCapacityId`, `CALCULATE`,
+`CALCULATETABLE`, Aggregattabellen) und nach hinterlegter Anmeldung –
+immer derselbe Fehler. Die Dimensionstabellen (`Items`, `Capacities`,
+`TimePoints`, `Dates`) antworten dagegen sauber.
 
-> Arbeitsbereich „Microsoft Fabric Capacity Metrics" → Semantikmodell
-> „Fabric Capacity Metrics" → **Einstellungen → Datenquellen-Anmeldeinformationen
-> → Anmelden**, mit einem Konto, das **Kapazitätsadministrator** ist.
-
-Danach erscheinen die CU-Zahlen von selbst; die App zeigt bis dahin
-„Anmeldung fehlt" mit genau dieser Anleitung.
+Deshalb verweist die Verbrauchsansicht bei diesem Zustand (`directquery`) mit
+einer Schaltfläche direkt in den Bericht der Metrik-App
+(`METRIK_BERICHT_URL`) – dort stimmen die Zahlen. Der Code für die Abfrage
+bleibt bestehen: Liefert die App eines Tages Zeilen, füllt sich die Spalte
+von selbst.
 
 ### Was gespeichert wird
 

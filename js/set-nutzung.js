@@ -134,6 +134,12 @@ const NUTZUNG_UI = (() => {
         → <b>Einstellungen → Datenquellen-Anmeldeinformationen → Anmelden</b>, mit einem
         Konto, das <b>Kapazitätsadministrator</b> ist. Danach erscheinen die Zahlen hier
         von selbst.`,
+      directquery: `Die Verbrauchszahlen der Metrik-App lassen sich <b>nicht über die
+        Schnittstelle abfragen</b>: Ihre Faktentabellen sind DirectQuery und lösen die
+        Datenquelle über Datenschnitte des Berichts auf – diesen Zusammenhang gibt es
+        außerhalb des Berichts nicht. Das liegt an der App, nicht an Anmeldung oder
+        Rechten. Die Zahlen stehen im Bericht der Metrik-App; der Verweis unten führt
+        direkt dorthin.`,
       keine_daten: `Die Metrik-App ist angebunden, liefert für diese Berichte aber noch
         keine Zeilen. Das ist direkt nach dem Einrichten normal – das Modell muss erst
         aktualisiert werden.`,
@@ -141,11 +147,14 @@ const NUTZUNG_UI = (() => {
       abfrage_fehler: `Die Abfrage an das Metrikmodell wurde abgelehnt.`
     };
     return `<div class="warn">
-      <b>Keine CU-Zahlen verfügbar.</b>
+      <b>Keine CU-Zahlen an dieser Stelle.</b>
       ${texte[c.grund] || "Grund unbekannt."}
       ${c.detail ? `<br><small>${esc(c.detail)}</small>` : ""}
-      <br><br>Bis dahin stehen oben nur die Aufrufzahlen – die sind exakt.
+      <br><br>Die Aufrufzahlen oben sind davon unberührt und exakt.
       Geschätzte Kapazitätswerte gibt es hier bewusst nicht.
+      ${c.metrikBericht ? `<div class="row" style="margin-top:12px">
+        <a class="btn sm" href="${esc(c.metrikBericht)}" target="_blank" rel="noopener">
+          📊 CU in der Metrik-App ansehen ↗</a></div>` : ""}
     </div>`;
   }
 

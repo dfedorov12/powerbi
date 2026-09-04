@@ -418,6 +418,7 @@ app.http("nutzung", {
           verfuegbar: cu.verfuegbar,
           grund: cu.grund || null,
           detail: cu.detail || null,
+          metrikBericht: METRIKEN.cfg().bericht || null,
           jeBericht
         }
       });

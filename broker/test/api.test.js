@@ -124,7 +124,9 @@ const nutzungAttrappe = {
   })
 };
 const metrikenAttrappe = {
-  verbrauch: async () => ({ verfuegbar: false, grund: "nicht_eingerichtet" })
+  verbrauch: async () => ({ verfuegbar: false, grund: "nicht_eingerichtet" }),
+  cfg: () => ({ workspace: "", dataset: "", kapazitaet: "",
+                bericht: "https://app.powerbi.com/groups/x/reports/y" })
 };
 
 const echtesLaden = Module._load;
@@ -412,6 +414,8 @@ test("ein Administrator laut Regel darf den Verbrauch sehen", async () => {
   assert.strictEqual(r.status, 200);
   assert.ok(r.jsonBody.zaehlung, "die Zaehlung muss mitkommen");
   assert.ok("verfuegbar" in r.jsonBody.cu, "der CU-Zustand muss mitkommen");
+  assert.match(r.jsonBody.cu.metrikBericht, /^https:\/\/app\.powerbi\.com\//,
+    "der Verweis in die Metrik-App muss mitkommen");
 });
 
 test("eine Token-Erneuerung wird als solche gezählt, nicht als neue Öffnung", async () => {

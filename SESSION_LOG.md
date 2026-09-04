@@ -461,3 +461,27 @@ Aufruf **gar nicht** gezaehlt wird.
 **Achtung:** Das per API gesetzte Token laeuft nach etwa einer Stunde ab – dann
 scheitert auch die geplante Aktualisierung wieder. Die Anmeldung ueber die
 Oberflaeche ersetzt es dauerhaft.
+
+**Nachtrag zu (7): Anmeldung war da, die Grenze liegt woanders.**
+Denis hat die Datenquellen-Anmeldung im Portal gesetzt (`credentialType: OAuth2`,
+Besitzer `administrator@dihag.com`), eine Aktualisierung lief erneut sauber
+durch – die **Faktentabellen bleiben trotzdem unabfragbar**:
+*„Internal Error: Error obtaining data location."*
+
+Durchgespielt und jedes Mal derselbe Fehler: TREATAS auf
+`Capacities[capacityId]`, TREATAS auf `MetricsByItemandOperationandDay[PremiumCapacityId]`,
+`CALCULATE`, `CALCULATETABLE`, sowie die Aggregattabellen `MetricsByItem` und
+`MetricsByItemandDay`. Die Dimensionstabellen (`Items`, `Capacities`,
+`TimePoints`, `Dates`) antworten dagegen einwandfrei. `INFO.EXPRESSIONS()` und
+`INFO.PARTITIONS()` sind ueber diesen Weg nicht verfuegbar, `INFO.VIEW.*` schon.
+
+**Schlussfolgerung:** Die Faktentabellen loesen ihre Datenquelle ueber
+**dynamische M-Parameter** auf, die an Datenschnitte des Berichts gebunden sind.
+Diesen Berichtskontext gibt es ueber `executeQueries` nicht – das ist eine
+Eigenschaft der Metrik-App, nicht ein Fehler in Anmeldung, Rechten oder DAX.
+
+**Konsequenz statt Verbiegen:** Neuer Zustand `directquery` mit klarer Erklaerung
+und einer Schaltflaeche **„CU in der Metrik-App ansehen"**, die direkt in deren
+Bericht fuehrt (`METRIK_BERICHT_URL`). Der Abfragecode bleibt: Liefert die App
+eines Tages Zeilen, fuellt sich die Spalte von selbst. Getrennt davon jetzt auch
+`anmeldung_fehlt` – die beiden Zustaende darf man nicht verwechseln.

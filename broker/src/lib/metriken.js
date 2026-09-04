@@ -27,7 +27,10 @@ const API = "https://api.powerbi.com/v1.0/myorg";
 const cfg = () => ({
   workspace: process.env.METRIK_WORKSPACE || "",
   dataset:   process.env.METRIK_DATASET || "",
-  kapazitaet: process.env.PBI_KAPAZITAET_ID || ""
+  kapazitaet: process.env.PBI_KAPAZITAET_ID || "",
+  // Adresse des Berichts der Metrik-App. Dorthin verweist die Oberfläche,
+  // wenn die Zahlen nicht abfragbar sind – dort stimmen sie immer.
+  bericht: process.env.METRIK_BERICHT_URL || ""
 });
 
 const eingerichtet = () => {
@@ -101,10 +104,22 @@ ${kapFilter}  TREATAS({ ${liste} }, MetricsByItemandOperationandDay[ItemId]),
     // die DirectQuery-Faktentabellen bekommen keine Datenquelle, weil für das
     // Semantikmodell keine gültige Anmeldung hinterlegt ist. Das ist ein
     // eigener Zustand und keine allgemeine Störung – entsprechend benannt.
-    if (/data location|CredentialsNotSpecified|credentials/i.test(text)) {
+    // Zwei verschiedene Zustände, die man nicht verwechseln darf:
+    if (/CredentialsNotSpecified|credentials/i.test(text)) {
       return { verfuegbar: false, grund: "anmeldung_fehlt",
                detail: "Das Metrikmodell hat keine gültige Anmeldung für seine "
                      + "Datenquelle." };
+    }
+    // „Error obtaining data location": Die Faktentabellen der Metrik-App sind
+    // DirectQuery und lösen ihre Quelle über dynamische M-Parameter auf, die an
+    // die Datenschnitte des Berichts gebunden sind. Über executeQueries gibt es
+    // diesen Berichtskontext nicht – die Abfrage scheitert dann unabhängig von
+    // Anmeldung, Rechten und DAX-Form. Nachgemessen am 04.09.2026 mit fünf
+    // verschiedenen Abfrageformen.
+    if (/data location/i.test(text)) {
+      return { verfuegbar: false, grund: "directquery",
+               detail: "Die Faktentabellen der Metrik-App sind über die API nicht "
+                     + "abfragbar." };
     }
     return { verfuegbar: false, grund: "abfrage_fehler",
              detail: text.slice(0, 300) };

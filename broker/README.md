@@ -96,6 +96,8 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 | `NUTZUNG_ANONYM` | – | `1` speichert statt der Adresse einen täglich wechselnden Kurz-Hash |
 | `METRIK_WORKSPACE` | – | Arbeitsbereich der App „Microsoft Fabric Capacity Metrics" |
 | `METRIK_DATASET` | – | deren Semantikmodell (für die CU-Zahlen) |
+| `PBI_KAPAZITAET_ID` | – | Kapazität, auf die die CU-Abfrage gefiltert wird |
+| `METRIK_BERICHT_URL` | – | Bericht der Metrik-App; dorthin verweist die Oberfläche, wenn die Zahlen nicht abfragbar sind |
 
 > **CORS steht an zwei Stellen, beide werden gebraucht.** Die
 > **Plattform-CORS-Liste** der Function App muss die Adressen des Frontends
