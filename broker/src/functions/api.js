@@ -26,6 +26,8 @@ const { pruefe, TokenFehler } = require("../lib/entra");
 const PBI = require("../lib/powerbi");
 const RECHTE = require("../lib/rechte");
 const SPEICHER = require("../lib/speicher");
+const NUTZUNG = require("../lib/nutzung");
+const METRIKEN = require("../lib/metriken");
 
 /* ── Einstellungen aus der Umgebung ───────────────────────────────── */
 
@@ -206,7 +208,13 @@ app.http("embedToken", {
       const b = await PBI.bericht(c, frei.workspaceId, frei.reportId);
       const t = await PBI.einbettungsToken(c, frei.workspaceId, frei.reportId, b.datasetId);
 
-      context.log(`Einbettungs-Token für ${key} an ${wer.upn}`);
+      // Nur zählen, wenn wirklich ein Token herausgeht – Fehlversuche sind
+      // keine Nutzung. „erneuern" schickt das Frontend beim Nachschieben
+      // eines ablaufenden Tokens mit.
+      const grund = request.query.get("grund") === "erneuerung" ? "erneuern" : "oeffnen";
+      await NUTZUNG.zaehlen(key, wer.upn, grund, context);
+
+      context.log(`Einbettungs-Token für ${key} an ${wer.upn} (${grund})`);
 
       return antwort(request, 200, {
         key,
@@ -343,6 +351,77 @@ app.http("rechte", {
     } catch (e) {
       // Fehler aus normalisiere() sind Eingabefehler, keine Serverfehler.
       if (!e.status && e instanceof Error) { e.status = 400; e.art = "eingabe"; }
+      return fehlerAntwort(request, e, context);
+    }
+  }
+});
+
+/* ── /api/nutzung?tage=30 ─────────────────────────────────────────────
+   Zwei Quellen, bewusst getrennt ausgewiesen:
+
+     „Öffnungen"  zählt dieser Broker selbst – jedes Einbettungs-Token geht
+                  durch ihn, die Zahl ist exakt.
+     „CU"         kommt aus der Fabric-Metrik-App. Ist sie nicht angebunden,
+                  steht das auch so da; geschätzte Kapazitätswerte wären
+                  wertlos.                                                 */
+
+app.http("nutzung", {
+  route: "nutzung",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: async (request, context) => {
+    if (request.method === "OPTIONS") return vorabfrage(request);
+    try {
+      await verwalter(request);
+      const tage = Math.min(Math.max(Number(request.query.get("tage") || 30), 1), 90);
+
+      const zaehlung = await NUTZUNG.auswertung(tage);
+
+      // Für die CU-Abfrage werden Bericht **und** Semantikmodell gebraucht:
+      // Der Löwenanteil des Verbrauchs entsteht beim Modell, nicht beim Bericht.
+      const c = cfg();
+      const elemente = [];
+      for (const b of freigaben()) {
+        elemente.push({ key: b.key, itemId: b.reportId, art: "Bericht" });
+        try {
+          const r = await PBI.bericht(c, b.workspaceId, b.reportId);
+          if (r?.datasetId) {
+            elemente.push({ key: b.key, itemId: r.datasetId, art: "Semantikmodell" });
+          }
+        } catch (e) {
+          context.warn(`Semantikmodell zu ${b.key} nicht ermittelbar: ${e.message}`);
+        }
+      }
+
+      const cu = await METRIKEN.verbrauch(c, PBI.appToken,
+        elemente.map(e => e.itemId), tage);
+
+      // CU je Bericht zusammenführen (Bericht + zugehöriges Modell)
+      const jeBericht = {};
+      if (cu.verfuegbar) {
+        for (const z of (cu.zeilen || [])) {
+          const treffer = elemente.filter(e =>
+            String(e.itemId).toLowerCase() === String(z.itemId).toLowerCase());
+          for (const t of treffer) {
+            const e = jeBericht[t.key] || (jeBericht[t.key] = { cu: 0, vorgaenge: 0, teile: [] });
+            e.cu += z.cu;
+            e.vorgaenge += z.vorgaenge;
+            e.teile.push({ art: t.art, vorgang: z.vorgang, cu: z.cu, vorgaenge: z.vorgaenge });
+          }
+        }
+      }
+
+      return antwort(request, 200, {
+        tage,
+        zaehlung,
+        cu: {
+          verfuegbar: cu.verfuegbar,
+          grund: cu.grund || null,
+          detail: cu.detail || null,
+          jeBericht
+        }
+      });
+    } catch (e) {
       return fehlerAntwort(request, e, context);
     }
   }

@@ -215,9 +215,19 @@
   };
   $("btnDiagnose").onclick = diagnose;
   $("diagZu").onclick = () => { $("diag").hidden = true; };
-  $("btnEinst").onclick = () => RECHTE_UI.oeffnen();
-  $("naEinst").onclick = () => RECHTE_UI.oeffnen();
+  function einstOeffnen(sicht = "rechte") {
+    $("rechte").hidden = false;
+    $("einstNav").querySelectorAll("button").forEach(b =>
+      b.className = b.dataset.sicht === sicht ? "on" : "");
+    $("rechteBereich").hidden = sicht !== "rechte";
+    $("nutzungBody").hidden = sicht !== "nutzung";
+    if (sicht === "rechte") RECHTE_UI.oeffnen(); else NUTZUNG_UI.oeffnen();
+  }
+  $("btnEinst").onclick = () => einstOeffnen("rechte");
+  $("naEinst").onclick = () => einstOeffnen("rechte");
   $("rechteZu").onclick = () => RECHTE_UI.schliessen();
+  $("einstNav").querySelectorAll("button").forEach(b =>
+    b.onclick = () => einstOeffnen(b.dataset.sicht));
 
   // Nach dem Speichern kann sich der eigene Zugriff geändert haben.
   document.addEventListener("rechte-geaendert", async () => {

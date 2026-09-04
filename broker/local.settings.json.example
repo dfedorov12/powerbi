@@ -16,7 +16,13 @@
 
     "ALLOWED_ORIGINS": "https://dfedorov12.github.io,http://localhost:8774",
     "ERLAUBTE_DOMAENEN": "dihag.com",
-    "ADMIN_UPNS": "administrator@dihag.com,fedorov@dihag.com"
+    "ADMIN_UPNS": "administrator@dihag.com",
+
+    "NUTZUNG_TAGE": "90",
+    "NUTZUNG_ANONYM": "0",
+
+    "METRIK_WORKSPACE": "<Arbeitsbereich der App Microsoft Fabric Capacity Metrics>",
+    "METRIK_DATASET": "<deren Semantikmodell>"
   },
   "Host": { "CORS": "" }
 }

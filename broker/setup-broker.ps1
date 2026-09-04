@@ -42,7 +42,7 @@ param(
     [string] $Speicherkonto  = "",
     [string] $Herkunft       = "https://dfedorov12.github.io",
     [string] $Domaenen       = "dihag.com",
-    [string] $AdminUpns      = "administrator@dihag.com,fedorov@dihag.com",
+    [string] $AdminUpns      = "administrator@dihag.com",
     [string] $Bereich        = "Berichte.Lesen",
 
     # Veroeffentlichungsprofil direkt als GitHub-Geheimnis hinterlegen

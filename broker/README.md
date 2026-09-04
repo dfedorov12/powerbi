@@ -18,6 +18,7 @@ Einbettungs-Token darf deshalb nur serverseitig entstehen.
 | `GET /api/zugriff` | Entra-Token | Was darf ich sehen, darf ich verwalten? |
 | `GET /api/rechte` | Entra-Token, Verwaltungsrecht | Zugriffsregeln lesen |
 | `PUT /api/rechte` | Entra-Token, Verwaltungsrecht | Regelmenge vollständig ersetzen |
+| `GET /api/nutzung?tage=30` | Entra-Token, Verwaltungsrecht | Aufrufzahlen (eigene Zählung) und CU (Fabric-Metriken) |
 | `GET /api/berichte` | Entra-Token, Verwaltungsrecht | Was der Dienstuser sieht (Hilfe beim Einrichten) |
 
 Der Broker prüft jedes Aufrufer-Token vollständig selbst: Signatur gegen die
@@ -32,6 +33,18 @@ der Entwicklerkonsole manipuliert, kommt damit an keinen weiteren Bericht.
 freigegebenen Bericht gibt es nur dann ein Token, wenn eine Regel den Aufrufer
 trifft (Benutzer, Gruppe oder Domäne). Auch das entscheidet sich hier und nicht
 im Frontend.
+
+### Nutzungszählung
+
+Jedes ausgegebene Einbettungs-Token wird in der Tabelle `Nutzung` festgehalten
+(Tag als Partition): Zeitpunkt, Berichtsschlüssel, Person, und ob es eine
+**Öffnung** oder eine **Erneuerung** war. Das Frontend hängt bei der
+Token-Erneuerung `&grund=erneuerung` an – so lässt sich ein den ganzen Tag
+offenes Dashboard von echten Aufrufen unterscheiden.
+
+Eine misslungene Zählung wird protokolliert, aber verschluckt: Ein Bericht darf
+nie an der Statistik scheitern. Alte Einträge räumt der Lesevorgang mit weg,
+das spart einen zweiten Zeitplan.
 
 ### Zugriffsregeln
 
@@ -78,7 +91,11 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 | `ALLOWED_ORIGINS` | `https://dfedorov12.github.io` | erlaubte Herkunft des Frontends |
 | `ERLAUBTE_DOMAENEN` | `dihag.com` | optional: nur diese E-Mail-Domänen |
 | `ADMIN_UPNS` | `administrator@dihag.com` | darf immer verwalten, kann sich nicht aussperren |
-| `RECHTE_STORAGE` | – | optional: eigenes Speicherkonto für die Regeln; sonst `AzureWebJobsStorage` |
+| `RECHTE_STORAGE` | – | optional: eigenes Speicherkonto für Regeln und Zählung; sonst `AzureWebJobsStorage` |
+| `NUTZUNG_TAGE` | `90` | wie lange Aufrufe aufbewahrt werden |
+| `NUTZUNG_ANONYM` | – | `1` speichert statt der Adresse einen täglich wechselnden Kurz-Hash |
+| `METRIK_WORKSPACE` | – | Arbeitsbereich der App „Microsoft Fabric Capacity Metrics" |
+| `METRIK_DATASET` | – | deren Semantikmodell (für die CU-Zahlen) |
 
 > **CORS steht an zwei Stellen, beide werden gebraucht.** Die
 > **Plattform-CORS-Liste** der Function App muss die Adressen des Frontends

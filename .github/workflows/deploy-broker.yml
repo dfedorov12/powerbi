@@ -54,6 +54,11 @@ env:
 
 jobs:
   bereitstellen:
+    # Ohne die OIDC-Identitaet (siehe Kopf dieser Datei) kann dieser Workflow
+    # nichts ausrichten. Dann wird er uebersprungen statt fehlzuschlagen -
+    # ein rot blinkendes Repository, das nur "noch nicht eingerichtet" meint,
+    # nuetzt niemandem. Sobald die Variablen gesetzt sind, laeuft er von selbst.
+    if: vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' && vars.AZURE_SUBSCRIPTION_ID != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

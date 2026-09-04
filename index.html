@@ -83,11 +83,18 @@
   <div id="rechte" hidden>
     <div class="einst-box">
       <div class="einst-kopf">
-        <h3>⚙️ Einstellungen · Berechtigungen</h3>
+        <h3>⚙️ Einstellungen</h3>
         <button class="btn ghost sm" id="rechteZu">Schließen</button>
       </div>
-      <div id="rechteBody"></div>
-      <div id="rechteForm" class="karte" hidden></div>
+      <div class="einst-nav" id="einstNav">
+        <button class="on" data-sicht="rechte">🔑 Berechtigungen</button>
+        <button data-sicht="nutzung">📈 Verbrauch</button>
+      </div>
+      <div id="rechteBereich">
+        <div id="rechteBody"></div>
+        <div id="rechteForm" class="karte" hidden></div>
+      </div>
+      <div id="nutzungBody" hidden></div>
     </div>
   </div>
 
@@ -108,6 +115,7 @@
 <script src="js/data.js"></script>
 <script src="js/embed.js"></script>
 <script src="js/set-rechte.js"></script>
+<script src="js/set-nutzung.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

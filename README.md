@@ -195,6 +195,41 @@ nicht mehr. Das steht auch in der Diagnose.
 
 ---
 
+## Verbrauch
+
+Unter **Einstellungen → Verbrauch** sehen Administratoren, wie oft welcher
+Bericht geöffnet wird. Zwei Quellen, bewusst getrennt ausgewiesen:
+
+| | Herkunft | Aussage |
+|---|---|---|
+| **Öffnungen / Erneuerungen / Personen** | der Broker selbst | exakt – jedes Einbettungs-Token geht durch ihn |
+| **CU** (Capacity Units) | App „Microsoft Fabric Capacity Metrics" | der tatsächliche Kapazitätsverbrauch |
+
+Öffnungen und **Token-Erneuerungen** werden getrennt gezählt: Ein Dashboard,
+das den ganzen Tag offen steht, holt sich jede Stunde ein neues Token und
+verbraucht dabei weiter Kapazität – ohne dass jemand den Bericht neu aufruft.
+„CU je Öffnung" teilt deshalb durch beides zusammen.
+
+**Geschätzte CU-Werte gibt es hier bewusst nicht.** Ist die Metrik-App nicht
+angebunden, steht in der Oberfläche, was fehlt. Zum Anbinden braucht die
+Function App
+
+```
+METRIK_WORKSPACE   Arbeitsbereich der App „Microsoft Fabric Capacity Metrics"
+METRIK_DATASET     deren Semantikmodell
+```
+
+und der Dienstuser Lesezugriff auf diesen Arbeitsbereich; außerdem muss die
+Mandanteneinstellung **„Dataset Execute Queries REST API"** aktiv sein.
+
+### Was gespeichert wird
+
+Je Aufruf: Zeitpunkt, Berichtsschlüssel, E-Mail-Adresse – mehr nicht. Einträge
+werden nach `NUTZUNG_TAGE` Tagen (Vorgabe 90) automatisch gelöscht. Mit
+`NUTZUNG_ANONYM=1` steht statt der Adresse ein **täglich wechselnder
+Kurz-Hash**: Nutzerzahlen bleiben zählbar, einzelne Personen sind nicht mehr
+nachvollziehbar.
+
 ## Aufbau
 
 ```
@@ -206,6 +241,7 @@ js/graph.js           schlanker Graph-Zugriff (Profil, optional Rechteliste)
 js/data.js            Benutzerkontext, Rolle, Sichtbarkeit
 js/embed.js           Broker-Aufruf, powerbi-client, Token-Erneuerung
 js/set-rechte.js      Einstellungen -> Berechtigungen (nur Administratoren)
+js/set-nutzung.js     Einstellungen -> Verbrauch (nur Administratoren)
 js/app.js             Oberflaeche
 broker/               Azure Function (Token-Broker)
 tests/                Sichtbarkeitslogik

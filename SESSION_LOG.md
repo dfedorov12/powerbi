@@ -350,3 +350,57 @@ ueberhaupt zum Zug kommen.
    `/api/health` seither die Regelzahl mitmeldet. Direkt in der Tabelle
    entfernt, Stand wieder 0. Lehre: Rueckgaben von Aufraeumschritten pruefen,
    nicht verwerfen.
+
+## 2026-09-04 (6): Verbrauch sichtbar, fedorov kein Haupt-Administrator mehr
+
+**Denis:** „fedorov@dihag.com als Admin rausnehmen. Wie viel Verbrauch entsteht
+bei einem Oeffnen des Berichts haette ich gerne als admin sichtbar."
+
+**1) Haupt-Administration:** `ADMIN_UPNS` steht jetzt nur noch auf
+`administrator@dihag.com` – wie in [[project-zapp]] und [[project-rundumdenjob]],
+wo Denis bewusst normaler Nutzer ist. Auch in `setup-broker.ps1` als Vorgabe
+nachgezogen.
+
+**2) Verbrauch.** Erst die Datenlage geprueft, statt drauflos zu bauen:
+- **Azure Monitor** kennt fuer `Microsoft.Fabric/capacities` **keinen**
+  Metrik-Namensraum (nur das alte `Microsoft.PowerBIDedicated`). Sackgasse.
+- Die App **„Microsoft Fabric Capacity Metrics"** ist dreimal installiert. Eine
+  Instanz ist abfragbar, aber leer („Select a capacity from dropdown"), die
+  beiden befuellten antworten meinem Konto mit **401** – sie gehoeren einem
+  anderen Team.
+
+Daraus die Bauart: **zwei getrennte Quellen, ehrlich ausgewiesen.**
+- *Öffnungen, Erneuerungen, Personen* zaehlt der Broker selbst (Tabelle
+  `Nutzung`, Tag als Partition). Exakt, weil jedes Einbettungs-Token durch ihn
+  geht. Öffnung und **Token-Erneuerung** getrennt: ein den ganzen Tag offenes
+  Dashboard holt sich stuendlich ein neues Token und kostet weiter Kapazitaet,
+  ist aber kein neuer Aufruf. „CU je Öffnung" teilt deshalb durch beides.
+- *CU* kommt aus dem Semantikmodell der Metrik-App
+  (`MetricsByItemandOperationandDay`: `sum_CU`, `count_operations`), abgefragt
+  per DAX ueber `executeQueries` – zusammengefasst ueber **Bericht und
+  Semantikmodell**, weil der groessere Teil beim Modell anfaellt. Fehlt der
+  Zugriff, sagt die Oberflaeche **was genau fehlt**, statt „–" oder, schlimmer,
+  einer Schaetzung.
+
+**Datenschutz mitgedacht:** gespeichert werden nur Zeitpunkt, Berichtsschluessel
+und Adresse; Loeschung nach `NUTZUNG_TAGE` (90) laeuft beim Lesen mit;
+`NUTZUNG_ANONYM=1` ersetzt die Adresse durch einen **taeglich wechselnden**
+Kurz-Hash – Nutzerzahlen bleiben zaehlbar, Personen nicht mehr nachvollziehbar.
+
+**Neu:** `broker/src/lib/nutzung.js`, `broker/src/lib/metriken.js`,
+Endpunkt `GET /api/nutzung`, `js/set-nutzung.js`, Unterreiter im
+Einstellungsfenster. 11 neue Tests (66 im Broker, 8 im Frontend).
+
+**Live geprueft:** zwei Aufrufe erzeugt (einer als Erneuerung markiert),
+`/api/nutzung` meldet 1 Öffnung, 1 Erneuerung, 1 Person – und beim CU-Teil
+sauber `verfuegbar: false, grund: nicht_eingerichtet`.
+
+**Nebenbei repariert:** Der GitHub-Workflow schlug bei jedem `broker/`-Push
+fehl, weil ich ihn auf OIDC umgestellt hatte, die Identitaet aber noch nicht
+existiert. Er wird jetzt uebersprungen, solange die Variablen fehlen – ein rot
+blinkendes Repository, das nur „noch nicht eingerichtet" meint, nuetzt niemandem.
+
+**Beobachtung, nicht angetastet:** In der Regeltabelle steht seit 10:30 eine
+Regel `benutzer fedorov@dihag.com -> bericht1` (angelegt ueber die Oberflaeche,
+nicht von mir). Damit ist deny-by-default aktiv: ausser fedorov sieht derzeit
+**niemand** ausser dem Haupt-Administrator den Bericht.

@@ -348,3 +348,43 @@ footer {
   .karte { margin: 12px; padding: 14px; }
   .warn { margin: 12px; }
 }
+
+/* ── Einstellungen: Unterreiter, Kacheln, Tagesverlauf ───────────────── */
+
+.einst-nav {
+  display: flex; gap: 4px; padding: 0 20px;
+  background: var(--azur-dark); overflow-x: auto;
+  position: sticky; top: 60px; z-index: 1;
+}
+.einst-nav button {
+  font: inherit; font-size: 14px;
+  background: transparent; border: 0; cursor: pointer;
+  color: #cfe0f3; padding: 10px 16px;
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.einst-nav button:hover { color: #fff; }
+.einst-nav button.on { color: #fff; border-bottom-color: var(--orange); font-weight: 600; }
+
+.kacheln {
+  display: grid; gap: 12px; margin: 14px 0 4px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.kachel {
+  background: #f7fafd; border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.kachel b { display: block; font-size: 26px; color: var(--navy); line-height: 1.1; }
+.kachel span { font-size: 12.5px; color: var(--muted); }
+
+.verlauf {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 90px; margin-top: 16px;
+  padding: 6px 8px; background: #f7fafd;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.balken { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 3px; }
+.stab {
+  width: 100%; background: var(--azur); border-radius: 2px 2px 0 0;
+  min-height: 2px; transition: background .15s;
+}
+.balken:hover .stab { background: var(--orange); }

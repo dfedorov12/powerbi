@@ -70,8 +70,15 @@ const EMBED = (() => {
     return d;
   }
 
-  const holeEinbettung = key =>
-    brokerGet("/embed-token?bericht=" + encodeURIComponent(key));
+  /** @param {"oeffnen"|"erneuerung"} grund – der Broker zählt beides getrennt,
+   *  damit ein den ganzen Tag offenes Dashboard nicht als hundert Aufrufe
+   *  in der Statistik landet. */
+  const holeEinbettung = (key, grund = "oeffnen") =>
+    brokerGet("/embed-token?bericht=" + encodeURIComponent(key)
+      + "&grund=" + encodeURIComponent(grund));
+
+  /** Nutzungszahlen und CU-Verbrauch (nur Administratoren). */
+  const holeNutzung = (tage = 30) => brokerGet("/nutzung?tage=" + Number(tage));
 
   /** Was darf die angemeldete Person sehen, darf sie verwalten? */
   const holeZugriff = () => brokerGet("/zugriff");
@@ -220,7 +227,7 @@ const EMBED = (() => {
     const eintrag = { report, timer: null };
     const erneuern = async () => {
       try {
-        const neu = await holeEinbettung(bericht.key);
+        const neu = await holeEinbettung(bericht.key, "erneuerung");
         await report.setAccessToken(neu.token);
         const a2 = Date.parse(neu.expiration || "");
         eintrag.timer = setTimeout(erneuern, Number.isFinite(a2)
@@ -249,5 +256,5 @@ const EMBED = (() => {
 
   return { zeigeBericht, beenden, vollbild, neuLaden, fehlerText,
            holeBerichtsliste, holeEinbettung, holeZugriff,
-           holeRechte, speichereRechte };
+           holeRechte, speichereRechte, holeNutzung };
 })();
