@@ -22,6 +22,11 @@ const NUTZUNG_UI = (() => {
   const zahl = n => Number(n || 0).toLocaleString("de-DE");
   const cu = n => Number(n || 0).toLocaleString("de-DE",
     { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const geld = (n, w = "EUR") => Number(n || 0).toLocaleString("de-DE",
+    { style: "currency", currency: w, maximumFractionDigits: 2 });
+
+  const AZURE_KOSTEN = "https://portal.azure.com/#view/Microsoft_Azure_CostManagement"
+    + "/Menu/~/costanalysis/open/costanalysisv3/openedBy/AzurePortal";
 
   let tage = 30;
 
@@ -30,6 +35,7 @@ const NUTZUNG_UI = (() => {
     try {
       const d = await EMBED.holeNutzung(tage);
       zeichnen(d);
+      kostenLaden(d);   // laeuft nebenher: die Kosten-API ist traege
     } catch (e) {
       $("nutzungBody").innerHTML = `<div class="warn">${esc(EMBED.fehlerText(e))}</div>`;
     }
@@ -98,6 +104,11 @@ const NUTZUNG_UI = (() => {
 
       ${cuHinweis(d.cu)}
 
+      <div id="kostenKarte" class="karte">
+        <h4>💶 Kosten</h4>
+        <p class="hinweis">werden geholt …</p>
+      </div>
+
       <div class="karte">
         <h4>🔒 Was gespeichert wird</h4>
         <p class="hinweis">Je Aufruf: Zeitpunkt, Berichtsschlüssel und
@@ -156,6 +167,95 @@ const NUTZUNG_UI = (() => {
         <a class="btn sm" href="${esc(c.metrikBericht)}" target="_blank" rel="noopener">
           📊 CU in der Metrik-App ansehen ↗</a></div>` : ""}
     </div>`;
+  }
+
+  /* ── Kosten ──────────────────────────────────────────────────────
+     Aus Azure Cost Management – dieselben Zahlen wie in der Kostenanalyse
+     des Portals. Bewusst nachgeladen: die API ist träge und drosselt. */
+
+  async function kostenLaden(nutzung) {
+    const ziel = $("kostenKarte");
+    if (!ziel) return;
+    try {
+      const k = await EMBED.holeKosten();
+      ziel.innerHTML = kostenInhalt(k, nutzung);
+    } catch (e) {
+      ziel.innerHTML = `<h4>💶 Kosten</h4>
+        <p class="hinweis">${esc(EMBED.fehlerText(e))}</p>
+        <div class="row"><a class="btn sec sm" href="${AZURE_KOSTEN}" target="_blank"
+          rel="noopener">Kostenanalyse in Azure öffnen ↗</a></div>`;
+    }
+  }
+
+  /** Öffnungen im laufenden Monat – nur die passen zeitlich zu „Monat bis heute". */
+  function oeffnungenDiesenMonat(nutzung) {
+    const monat = new Date().toISOString().slice(0, 7);
+    return (nutzung?.zaehlung?.jeTag || [])
+      .filter(t => String(t.schluessel).startsWith(monat))
+      .reduce((s, t) => s + t.oeffnen + t.erneuern, 0);
+  }
+
+  function kostenInhalt(k, nutzung) {
+    if (!k.verfuegbar) {
+      const texte = {
+        nicht_eingerichtet: `Die Kostenabfrage ist nicht eingerichtet. Dafür braucht die
+          Function App <code>KOSTEN_ABO</code> und <code>KOSTEN_GRUPPEN</code>.`,
+        kein_zugriff: `Der Dienstuser darf die Kosten nicht lesen – ihm fehlt die Rolle
+          <b>Cost Management Reader</b> auf dem Abonnement.`,
+        gedrosselt: `Azure drosselt die Kostenabfrage gerade (das tut sie regelmäßig).
+          Der nächste Aufruf in einigen Minuten liefert die Zahlen – die Kostenanalyse
+          im Portal geht sofort.`
+      };
+      return `<h4>💶 Kosten</h4>
+        <p class="hinweis">${texte[k.grund] || esc(k.detail || "Kosten nicht abrufbar.")}</p>
+        <div class="row"><a class="btn sec sm" href="${AZURE_KOSTEN}" target="_blank"
+          rel="noopener">Kostenanalyse in Azure öffnen ↗</a></div>`;
+    }
+
+    const m = k.laufenderMonat, v = k.vormonat, w = m.waehrung || "EUR";
+    const aufrufe = oeffnungenDiesenMonat(nutzung);
+    const proAufruf = aufrufe ? m.summe / aufrufe : null;
+
+    return `<div class="karte-kopf">
+        <h4>💶 Kosten</h4>
+        <a class="btn sec sm" href="${AZURE_KOSTEN}" target="_blank" rel="noopener">
+          Kostenanalyse in Azure ↗</a>
+      </div>
+      <p class="hinweis">Tatsächliche Azure-Kosten der Ressourcengruppen dieser Anwendung,
+        Stand ${esc(new Date(k.stand).toLocaleString("de-DE"))}.</p>
+
+      <div class="kacheln">
+        <div class="kachel"><b>${geld(m.summe, w)}</b><span>laufender Monat</span></div>
+        ${m.kapazitaet !== null
+          ? `<div class="kachel"><b>${geld(m.kapazitaet, w)}</b><span>davon Fabric-Kapazität</span></div>
+             <div class="kachel"><b>${geld(m.uebrige, w)}</b><span>übrige Ressourcen</span></div>`
+          : ""}
+        <div class="kachel"><b>${geld(v.summe, w)}</b><span>Vormonat</span></div>
+      </div>
+
+      <div class="tbl-wrap" style="margin-top:14px"><table class="tbl">
+        <thead><tr><th>Ressourcengruppe</th>
+          <th class="rechts">laufender Monat</th><th class="rechts">Vormonat</th></tr></thead>
+        <tbody>
+          ${m.jeGruppe.map(g => {
+            const vor = (v.jeGruppe.find(x => x.gruppe === g.gruppe) || {}).betrag || 0;
+            return `<tr><td>${esc(g.gruppe)}</td>
+              <td class="rechts">${geld(g.betrag, w)}</td>
+              <td class="rechts">${geld(vor, w)}</td></tr>`;
+          }).join("") || `<tr><td colspan="3" class="leer">Keine Kosten im Zeitraum.</td></tr>`}
+        </tbody>
+      </table></div>
+
+      <p class="hinweis" style="margin-top:14px">
+        <b>Was eine Öffnung kostet:</b> genau genommen <b>nichts extra</b>. Die
+        Fabric-Kapazität wird pro Stunde bezahlt, nicht pro Aufruf – ein Bericht mehr
+        oder weniger ändert die Rechnung nicht, solange die Kapazität nicht ausgelastet
+        ist. Interessant ist deshalb die Auslastung (CU), nicht der Klick.
+        ${proAufruf !== null ? `Rein rechnerisch verteilen sich die
+          ${geld(m.summe, w)} dieses Monats auf ${zahl(aufrufe)} Aufrufe, also
+          <b>${geld(proAufruf, w)} je Aufruf</b> – eine Vollkostenzahl, keine Grenzkosten:
+          Sie sinkt mit jeder weiteren Nutzung.` : ""}
+      </p>`;
   }
 
   return { oeffnen };

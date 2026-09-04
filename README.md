@@ -246,6 +246,33 @@ einer Schaltfläche direkt in den Bericht der Metrik-App
 bleibt bestehen: Liefert die App eines Tages Zeilen, füllt sich die Spalte
 von selbst.
 
+### Kosten
+
+Dieselbe Ansicht zeigt die **tatsächlichen Azure-Kosten** aus Cost Management –
+laufender Monat, Vormonat und die Aufteilung je Ressourcengruppe, dazu ein
+Verweis in die Kostenanalyse des Portals. Nötig dafür:
+
+```
+KOSTEN_ABO            Abonnement
+KOSTEN_GRUPPEN        Ressourcengruppen dieser Anwendung
+KOSTEN_KAPAZITAET_RG  welche davon die Fabric-Kapazität enthält
+```
+
+und die Rolle **Cost Management Reader** für den Dienstuser auf dem Abonnement.
+
+Die Ansicht sagt dazu auch das Unbequeme: **Eine Öffnung kostet nichts extra.**
+Die Kapazität wird pro Stunde bezahlt, nicht pro Aufruf – ein Bericht mehr oder
+weniger ändert die Rechnung nicht, solange die Kapazität nicht ausgelastet ist.
+Die ausgewiesene Zahl „je Aufruf" ist deshalb ausdrücklich eine **Vollkosten**-
+Rechnung (Monatskosten ÷ Aufrufe), keine Grenzkosten; sie sinkt mit jeder
+weiteren Nutzung.
+
+> Cost Management **drosselt** spürbar (HTTP 429). Der Broker wiederholt mit
+> wachsender Wartezeit, beachtet `Retry-After`, fragt die beiden Zeiträume
+> **nacheinander** ab (parallel tritt sofort ins Limit) und hält das Ergebnis
+> eine Stunde vor. Bei anhaltender Drosselung sagt die Ansicht das – und
+> verweist ins Portal, das sofort antwortet.
+
 ### Was gespeichert wird
 
 Je Aufruf: Zeitpunkt, Berichtsschlüssel, E-Mail-Adresse – mehr nicht. Einträge

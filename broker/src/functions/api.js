@@ -8,6 +8,8 @@
      GET     /api/zugriff      Was darf ich sehen, bin ich Administrator?
      GET/PUT /api/rechte       Zugriffsregeln lesen und ersetzen (Administratoren)
      GET     /api/berichte     Was der Dienstuser sieht (Administratoren)
+     GET     /api/nutzung      Aufrufzahlen und CU-Verbrauch (Administratoren)
+     GET     /api/kosten       Azure-Kosten der Anwendung (Administratoren)
 
    Grundregeln:
      - Aufrufer müssen ein gültiges Entra-Token dieses Mandanten für die
@@ -28,6 +30,7 @@ const RECHTE = require("../lib/rechte");
 const SPEICHER = require("../lib/speicher");
 const NUTZUNG = require("../lib/nutzung");
 const METRIKEN = require("../lib/metriken");
+const KOSTEN = require("../lib/kosten");
 
 /* ── Einstellungen aus der Umgebung ───────────────────────────────── */
 
@@ -422,6 +425,28 @@ app.http("nutzung", {
           jeBericht
         }
       });
+    } catch (e) {
+      return fehlerAntwort(request, e, context);
+    }
+  }
+});
+
+/* ── /api/kosten ──────────────────────────────────────────────────────
+   Die tatsächlichen Azure-Kosten – dieselben Zahlen wie in der
+   Kostenanalyse des Portals. Bewusst ein eigener Endpunkt: Die
+   Cost-Management-API ist träge und drosselt gern, die Aufrufzahlen sollen
+   deswegen nicht warten müssen.                                        */
+
+app.http("kosten", {
+  route: "kosten",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: async (request, context) => {
+    if (request.method === "OPTIONS") return vorabfrage(request);
+    try {
+      await verwalter(request);
+      const frisch = request.query.get("frisch") === "1";
+      return antwort(request, 200, await KOSTEN.kosten(cfg(), frisch));
     } catch (e) {
       return fehlerAntwort(request, e, context);
     }

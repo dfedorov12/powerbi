@@ -80,6 +80,10 @@ const EMBED = (() => {
   /** Nutzungszahlen und CU-Verbrauch (nur Administratoren). */
   const holeNutzung = (tage = 30) => brokerGet("/nutzung?tage=" + Number(tage));
 
+  /** Azure-Kosten (nur Administratoren). Getrennt, weil die
+   *  Cost-Management-API traege ist – die Aufrufzahlen sollen nicht warten. */
+  const holeKosten = () => brokerGet("/kosten");
+
   /** Was darf die angemeldete Person sehen, darf sie verwalten? */
   const holeZugriff = () => brokerGet("/zugriff");
 
@@ -256,5 +260,5 @@ const EMBED = (() => {
 
   return { zeigeBericht, beenden, vollbild, neuLaden, fehlerText,
            holeBerichtsliste, holeEinbettung, holeZugriff,
-           holeRechte, speichereRechte, holeNutzung };
+           holeRechte, speichereRechte, holeNutzung, holeKosten };
 })();

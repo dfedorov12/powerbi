@@ -19,6 +19,7 @@ Einbettungs-Token darf deshalb nur serverseitig entstehen.
 | `GET /api/rechte` | Entra-Token, Verwaltungsrecht | Zugriffsregeln lesen |
 | `PUT /api/rechte` | Entra-Token, Verwaltungsrecht | Regelmenge vollständig ersetzen |
 | `GET /api/nutzung?tage=30` | Entra-Token, Verwaltungsrecht | Aufrufzahlen (eigene Zählung) und CU (Fabric-Metriken) |
+| `GET /api/kosten` | Entra-Token, Verwaltungsrecht | Azure-Kosten (Cost Management), eine Stunde zwischengespeichert |
 | `GET /api/berichte` | Entra-Token, Verwaltungsrecht | Was der Dienstuser sieht (Hilfe beim Einrichten) |
 
 Der Broker prüft jedes Aufrufer-Token vollständig selbst: Signatur gegen die
@@ -98,6 +99,10 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 | `METRIK_DATASET` | – | deren Semantikmodell (für die CU-Zahlen) |
 | `PBI_KAPAZITAET_ID` | – | Kapazität, auf die die CU-Abfrage gefiltert wird |
 | `METRIK_BERICHT_URL` | – | Bericht der Metrik-App; dorthin verweist die Oberfläche, wenn die Zahlen nicht abfragbar sind |
+| `KOSTEN_ABO` | `7db7a5b4-…` | Abonnement für die Kostenabfrage (leer = aus) |
+| `KOSTEN_GRUPPEN` | `rg-dihag-dp-dev-westeurope,rg-berichte-broker` | Ressourcengruppen dieser Anwendung |
+| `KOSTEN_KAPAZITAET_RG` | `rg-dihag-dp-dev-westeurope` | welche davon die Fabric-Kapazität enthält |
+| `KOSTEN_WARTEMS` | `10000` | Grundwartezeit der Wiederholung bei Drosselung |
 
 > **CORS steht an zwei Stellen, beide werden gebraucht.** Die
 > **Plattform-CORS-Liste** der Function App muss die Adressen des Frontends

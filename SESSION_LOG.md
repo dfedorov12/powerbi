@@ -485,3 +485,66 @@ und einer Schaltflaeche **„CU in der Metrik-App ansehen"**, die direkt in dere
 Bericht fuehrt (`METRIK_BERICHT_URL`). Der Abfragecode bleibt: Liefert die App
 eines Tages Zeilen, fuellt sich die Spalte von selbst. Getrennt davon jetzt auch
 `anmeldung_fehlt` – die beiden Zustaende darf man nicht verwechseln.
+
+## 2026-09-04 (8): Kostenanalyse; Metrik-App bleibt defekt
+
+**Denis:** Kostenanalyse als Administrator, dazu der Screenshot der Metrik-App
+mit `QueryUserError` und Cluster `wabi-germany-west-central`.
+
+### Der Screenshot hat meine vorige Schlussfolgerung korrigiert
+
+Ich hatte geschrieben, die CU-Zahlen seien „eine Grenze von `executeQueries`".
+Der Screenshot zeigt: **Der Bericht der Metrik-App scheitert selbst** an
+denselben Visuals („This might be caused by a capacity or license issue").
+Es ist also kein API-Thema, sondern die DirectQuery-Verbindung dieser
+Installation ist grundsaetzlich defekt.
+
+Daraufhin geprueft und behoben, was in unserer Hand lag:
+- Der Metrik-Arbeitsbereich lag auf **shared capacity**
+  (`isOnDedicatedCapacity: False`) – genau das, was „capacity issue" meint.
+  Der **F4 zugewiesen**; bestaetigt (`dediziert=True`).
+- Trotzdem: Faktentabellen weiterhin `Error obtaining data location`,
+  Dimensionstabellen weiterhin einwandfrei.
+
+**Stand:** Uebernahme, Anmeldung, Aktualisierung, Kapazitaetszuweisung und
+Dienstuser-Zugriff sind erledigt – die DirectQuery-Schicht dieser Installation
+bleibt kaputt. Weitere Blindversuche waeren Zeitverschwendung; die App bringt
+ihre eigene Diagnose nicht heraus. Ein sauberer Neuinstall der Metrik-App
+(eigener Arbeitsbereich, Installation durch einen Kapazitaetsadministrator)
+waere der naechste sinnvolle Schritt – das ist eine UI-Aktion.
+
+### Kostenanalyse gebaut
+
+Statt weiter an CU-Zahlen zu ziehen, die diese Installation nicht hergibt: die
+**echten Kosten** aus Azure Cost Management. Die API antwortet zuverlaessig.
+
+- `broker/src/lib/kosten.js`: `client_credentials` fuer
+  `management.azure.com`, Abfrage `MonthToDate` und `TheLastMonth`, gruppiert
+  nach Ressourcengruppe, gefiltert auf die eigenen; Aufteilung in
+  „Fabric-Kapazitaet" und „uebrige".
+- Endpunkt `GET /api/kosten` (nur Administratoren), eine Stunde zwischengespeichert.
+- Rolle **Cost Management Reader** fuer den Dienstuser auf dem Abonnement erteilt.
+- Oberflaeche: Kostenkarte in der Verbrauchsansicht mit laufendem Monat,
+  Vormonat, Aufteilung je Ressourcengruppe und Verweis in die Kostenanalyse.
+
+**Zwei Eigenheiten, die Arbeit gemacht haben:**
+1. Cost Management **drosselt** hart. Mein erster Entwurf fragte beide
+   Zeitraeume **parallel** ab und trat damit sofort ins Limit. Jetzt
+   nacheinander, mit `Retry-After` und wachsender Wartezeit.
+2. Ein **429 ist eine gute Nachricht**: Azure drosselt nur authentifizierte und
+   autorisierte Aufrufe. Bei fehlender Rolle kaeme 403. Der Zugriff des
+   Dienstusers ist damit belegt, auch wenn die Live-Abfrage waehrend des
+   Testens im Limit haengen blieb.
+
+**Inhaltlich wichtig – und in der Oberflaeche so gesagt:** Eine Oeffnung kostet
+**nichts extra**. Die Kapazitaet wird pro Stunde bezahlt, nicht pro Aufruf. Die
+ausgewiesene Zahl „je Aufruf" ist eine **Vollkostenrechnung** (Monatskosten
+geteilt durch Aufrufe) und ausdruecklich keine Grenzkosten – sie sinkt mit jeder
+weiteren Nutzung. Wer sparen will, schaut auf Auslastung und SKU, nicht auf
+Klicks.
+
+**Zahlen zur Einordnung** (laufender Monat, gemessen): `rg-dihag-dp-dev-westeurope`
+mit der F4 **49,78 EUR**, `rg-berichte-broker` **0,00 EUR** – der Broker selbst
+kostet praktisch nichts.
+
+10 neue Tests (81 im Broker, 8 im Frontend).

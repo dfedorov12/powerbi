@@ -22,7 +22,12 @@
     "NUTZUNG_ANONYM": "0",
 
     "METRIK_WORKSPACE": "<Arbeitsbereich der App Microsoft Fabric Capacity Metrics>",
-    "METRIK_DATASET": "<deren Semantikmodell>"
+    "METRIK_DATASET": "<deren Semantikmodell>",
+    "METRIK_BERICHT_URL": "<Adresse des Berichts der Metrik-App>",
+
+    "KOSTEN_ABO": "<Abonnement-Id>",
+    "KOSTEN_GRUPPEN": "rg-dihag-dp-dev-westeurope,rg-berichte-broker",
+    "KOSTEN_KAPAZITAET_RG": "rg-dihag-dp-dev-westeurope"
   },
   "Host": { "CORS": "" }
 }

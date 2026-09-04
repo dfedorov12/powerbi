@@ -123,6 +123,12 @@ const nutzungAttrappe = {
     gesamt: { oeffnen: 0, erneuern: 0, personen: 0 }, jeBericht: [], jeTag: []
   })
 };
+const kostenAttrappe = {
+  kosten: async (_cfg, frisch) => ({ verfuegbar: true, frisch: frisch === true,
+    laufenderMonat: { summe: 49.9, kapazitaet: 49.78, uebrige: 0.12, waehrung: "EUR", jeGruppe: [] },
+    vormonat: { summe: 310.9, kapazitaet: 310.5, uebrige: 0.4, waehrung: "EUR", jeGruppe: [] },
+    stand: new Date().toISOString() })
+};
 const metrikenAttrappe = {
   verbrauch: async () => ({ verfuegbar: false, grund: "nicht_eingerichtet" }),
   cfg: () => ({ workspace: "", dataset: "", kapazitaet: "",
@@ -137,6 +143,7 @@ Module._load = function (anfrage, ...rest) {
   if (anfrage === "../lib/speicher") return speicherAttrappe;
   if (anfrage === "../lib/nutzung") return nutzungAttrappe;
   if (anfrage === "../lib/metriken") return metrikenAttrappe;
+  if (anfrage === "../lib/kosten") return kostenAttrappe;
   return echtesLaden.call(this, anfrage, ...rest);
 };
 require("../src/functions/api");
@@ -429,4 +436,31 @@ test("abgewiesene Aufrufe werden nicht gezählt", async () => {
   await ruf("embed-token", { query: { bericht: "bericht1" } });              // ohne Ausweis
   await ruf("embed-token", { ausweis: token(), query: { bericht: "weg" } }); // unbekannt
   assert.deepStrictEqual(gezaehlt, [], "nur ausgegebene Token zählen");
+});
+
+/* ── Kosten ──────────────────────────────────────────────────────────── */
+
+test("die Kosten sind Administratoren vorbehalten", async () => {
+  const r = await ruf("kosten", { ausweis: token() });
+  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.jsonBody.art, "kein_admin");
+});
+
+test("ohne Ausweis gibt es keine Kosten", async () => {
+  const r = await ruf("kosten");
+  assert.strictEqual(r.status, 401);
+});
+
+test("Administratoren bekommen laufenden Monat und Vormonat", async () => {
+  const r = await ruf("kosten", { ausweis: token({ upn: "administrator@dihag.com" }) });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.jsonBody.laufenderMonat.kapazitaet, 49.78);
+  assert.strictEqual(r.jsonBody.vormonat.summe, 310.9);
+  assert.strictEqual(r.jsonBody.frisch, false, "ohne ?frisch=1 darf der Zwischenspeicher gelten");
+});
+
+test("mit ?frisch=1 wird am Zwischenspeicher vorbei geholt", async () => {
+  const r = await ruf("kosten", { ausweis: token({ upn: "administrator@dihag.com" }),
+                                  query: { frisch: "1" } });
+  assert.strictEqual(r.jsonBody.frisch, true);
 });
