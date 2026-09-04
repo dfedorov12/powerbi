@@ -404,3 +404,60 @@ blinkendes Repository, das nur „noch nicht eingerichtet" meint, nuetzt niemand
 Regel `benutzer fedorov@dihag.com -> bericht1` (angelegt ueber die Oberflaeche,
 nicht von mir). Damit ist deny-by-default aktiv: ausser fedorov sieht derzeit
 **niemand** ausser dem Haupt-Administrator den Bericht.
+
+## 2026-09-04 (7): Kapazitaetsmetriken angebunden – bis auf einen Klick
+
+**Denis:** „Microsoft Fabric Capacity Metrics anbinden." Spaeter praezisiert:
+„eig soll ja auch nur der admin die CU sehen."
+
+**Ausgangslage geklaert.** Drei Installationen der Metrik-App im Mandanten:
+- `60a85b76…` (10.12.2025) – gehoert Mike Weber, fuer uns nicht lesbar
+- `86efefab…` (23.3.2026) – ohne Mitglieder, fuer uns nicht lesbar
+- `ea003234…` (ohne Datum) – **`Fabric_Administratoren` ist dort Admin**, also unsere
+
+(Beim ersten Anlauf hatte ich Arbeitsbereiche und Semantikmodelle falsch
+gepaart und daraus 401 gelesen. Mit der richtigen Zuordnung blieb es bei 401 –
+die beiden sind wirklich fremd.)
+
+**Ursache gefunden:** Unsere Instanz war seit **Juli 2025** kaputt. Der
+Refresh-Fehler war eindeutig: *„No capacities found. You need to be a capacity
+admin of at least one or more capacities."* Konfiguriert war sie von
+`peter.zimmermann@areto.de` – einem externen Berater ohne Kapazitaetsrechte.
+
+**Gemacht:**
+1. Semantikmodell auf `administrator@dihag.com` uebernommen (`Default.TakeOver`)
+   – der ist Kapazitaetsadministrator der F4.
+2. Danach `ModelRefreshFailed_CredentialsNotSpecified`; Anmeldeinformationen per
+   Gateway-API mit einem Power-BI-Zugriffstoken gesetzt – **angenommen**.
+3. Aktualisierung: **Completed** in 18 s. Seitdem stehen `kapdihagdpwesteurope`
+   (F4) und unser Semantikmodell „Aktuelle DIHAG Geschaeftspartner" im Modell.
+4. Dienstuser als **Contributor** in den Metrik-Arbeitsbereich (fuer
+   `executeQueries` reicht *Viewer* nicht – Build-Recht noetig).
+5. `METRIK_WORKSPACE`, `METRIK_DATASET`, `PBI_KAPAZITAET_ID` in der Function App.
+
+**Wo es haengt:** Die Faktentabellen (`MetricsByItem*`) sind DirectQuery und
+antworten mit *„Internal Error: Error obtaining data location"* – die
+Dimensionstabellen (Items, Capacities, TimePoints, Dates) dagegen sauber. Das per
+API gesetzte Zugriffstoken reicht fuer die Aktualisierung der Importtabellen,
+aber nicht fuer die DirectQuery-Aufloesung. Auch der Kapazitaetsfilter im DAX
+(`TREATAS` auf `Capacities[capacityId]`, jetzt fest eingebaut) aendert daran
+nichts, und `useEndUserOAuth2Credentials` lehnt der Konnektor mit 400 ab.
+
+**Ergebnis:** Der letzte Schritt geht nur ueber die Oberflaeche – einmal
+*Einstellungen → Datenquellen-Anmeldeinformationen → Anmelden* am
+Semantikmodell, mit einem Kapazitaetsadministrator. Der Broker benennt genau
+diesen Zustand jetzt als `anmeldung_fehlt` samt Anleitung, statt „Grund
+unbekannt". Zusaetzlich neu: `keine_daten` fuer „angebunden, aber noch leer".
+
+**Zur Rueckfrage (nur Admins sehen CU):** War bereits so – `/api/nutzung` haengt
+am selben `verwalter`-Gate wie die Berechtigungen, die Schaltflaeche ist fuer
+andere ausgeblendet. Es fehlten aber die **Tests** dafuer; jetzt belegt:
+Nicht-Admin 403, ohne Ausweis 401, Administrator-per-Regel 200. Dabei fiel auf,
+dass in `api.test.js` die Attrappen fuer Zaehlung und Metriken fehlten (der
+Endpunkt lief in einen 500er) – ergaenzt und gleich mitgeprueft, dass eine
+Oeffnung als `oeffnen`, eine Erneuerung als `erneuern` und ein abgewiesener
+Aufruf **gar nicht** gezaehlt wird.
+
+**Achtung:** Das per API gesetzte Token laeuft nach etwa einer Stunde ab – dann
+scheitert auch die geplante Aktualisierung wieder. Die Anmeldung ueber die
+Oberflaeche ersetzt es dauerhaft.

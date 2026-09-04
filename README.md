@@ -210,17 +210,37 @@ das den ganzen Tag offen steht, holt sich jede Stunde ein neues Token und
 verbraucht dabei weiter Kapazität – ohne dass jemand den Bericht neu aufruft.
 „CU je Öffnung" teilt deshalb durch beides zusammen.
 
+Die Ansicht ist **Administratoren vorbehalten** – die Schaltfläche erscheint
+nur für sie, und `GET /api/nutzung` weist alle anderen mit 403 ab.
+
 **Geschätzte CU-Werte gibt es hier bewusst nicht.** Ist die Metrik-App nicht
-angebunden, steht in der Oberfläche, was fehlt. Zum Anbinden braucht die
-Function App
+angebunden, steht in der Oberfläche, was genau fehlt.
 
-```
-METRIK_WORKSPACE   Arbeitsbereich der App „Microsoft Fabric Capacity Metrics"
-METRIK_DATASET     deren Semantikmodell
-```
+### Stand der Anbindung
 
-und der Dienstuser Lesezugriff auf diesen Arbeitsbereich; außerdem muss die
-Mandanteneinstellung **„Dataset Execute Queries REST API"** aktiv sein.
+Angebunden ist die Instanz im Arbeitsbereich **„Microsoft Fabric Capacity
+Metrics"** (`ea003234-…`, Semantikmodell `3898b87e-…`); die Function App kennt
+sie über `METRIK_WORKSPACE`, `METRIK_DATASET` und `PBI_KAPAZITAET_ID`, und der
+Dienstuser ist dort Contributor (für `executeQueries` reicht *Viewer* nicht).
+
+Das Modell lief unter einem externen Berater, der seit Juli 2025 kein
+Kapazitätsadministrator mehr ist – seither schlug jede Aktualisierung fehl
+(*„No capacities found. You need to be a capacity admin"*). Es wurde auf
+`administrator@dihag.com` übernommen und aktualisiert; **Kapazität und
+Semantikmodelle sind seitdem im Modell sichtbar.**
+
+**Ein Schritt fehlt noch, und der geht nur über die Oberfläche:** Die
+Faktentabellen sind DirectQuery und brauchen eine dauerhaft hinterlegte
+Anmeldung. Per API lässt sich nur ein Zugriffstoken setzen – das genügt für die
+Aktualisierung der Importtabellen, nicht für DirectQuery (`Error obtaining data
+location`). Einmalig im Power-BI-Portal:
+
+> Arbeitsbereich „Microsoft Fabric Capacity Metrics" → Semantikmodell
+> „Fabric Capacity Metrics" → **Einstellungen → Datenquellen-Anmeldeinformationen
+> → Anmelden**, mit einem Konto, das **Kapazitätsadministrator** ist.
+
+Danach erscheinen die CU-Zahlen von selbst; die App zeigt bis dahin
+„Anmeldung fehlt" mit genau dieser Anleitung.
 
 ### Was gespeichert wird
 

@@ -54,12 +54,20 @@ async function verbrauch(pbiCfg, appToken, itemIds, tage = 30) {
   if (!ids.length) return { verfuegbar: true, zeilen: [] };
 
   const liste = ids.map(i => `"${dax(i)}"`).join(", ");
+  // Die Faktentabellen sind DirectQuery; das Modell löst die Datenquelle über
+  // die gewählte Kapazität auf – im Bericht macht das der Datenschnitt, hier
+  // dieser Filter. Ohne ihn antwortet das Modell mit „Error obtaining data
+  // location".
+  const kapFilter = c.kapazitaet
+    ? `  TREATAS({ "${dax(c.kapazitaet)}" }, Capacities[capacityId]),
+`
+    : "";
   const abfrage = `
 EVALUATE
 SUMMARIZECOLUMNS(
   MetricsByItemandOperationandDay[ItemId],
   MetricsByItemandOperationandDay[OperationName],
-  TREATAS({ ${liste} }, MetricsByItemandOperationandDay[ItemId]),
+${kapFilter}  TREATAS({ ${liste} }, MetricsByItemandOperationandDay[ItemId]),
   FILTER(ALL(MetricsByItemandOperationandDay[Date]),
          MetricsByItemandOperationandDay[Date] >= TODAY() - ${Number(tage) || 30}),
   "CU", SUM(MetricsByItemandOperationandDay[sum_CU]),
@@ -89,6 +97,15 @@ SUMMARIZECOLUMNS(
   }
   const text = await res.text();
   if (!res.ok) {
+    // Der häufigste Fall bei diesem Modell: Die Importtabellen sind da, aber
+    // die DirectQuery-Faktentabellen bekommen keine Datenquelle, weil für das
+    // Semantikmodell keine gültige Anmeldung hinterlegt ist. Das ist ein
+    // eigener Zustand und keine allgemeine Störung – entsprechend benannt.
+    if (/data location|CredentialsNotSpecified|credentials/i.test(text)) {
+      return { verfuegbar: false, grund: "anmeldung_fehlt",
+               detail: "Das Metrikmodell hat keine gültige Anmeldung für seine "
+                     + "Datenquelle." };
+    }
     return { verfuegbar: false, grund: "abfrage_fehler",
              detail: text.slice(0, 300) };
   }
@@ -96,6 +113,11 @@ SUMMARIZECOLUMNS(
   let d = null;
   try { d = JSON.parse(text); } catch { /* unerwartete Antwort */ }
   const zeilen = d?.results?.[0]?.tables?.[0]?.rows || [];
+  if (!zeilen.length) {
+    // Angebunden, aber (noch) nichts zu holen – etwa direkt nach dem Einrichten
+    // oder wenn das Modell seit Tagen nicht aktualisiert wurde.
+    return { verfuegbar: false, grund: "keine_daten" };
+  }
   return {
     verfuegbar: true,
     zeilen: zeilen.map(z => ({

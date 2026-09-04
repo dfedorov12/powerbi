@@ -128,6 +128,15 @@ const NUTZUNG_UI = (() => {
       kein_zugriff: `Der Dienstuser darf das Semantikmodell der Metrik-App nicht lesen.
         Er braucht dort Lesezugriff, und die Mandanteneinstellung
         <b>„Dataset Execute Queries REST API“</b> muss aktiv sein.`,
+      anmeldung_fehlt: `Das Semantikmodell der Metrik-App hat keine gültige Anmeldung
+        für seine Datenquelle. Einmalig im Power-BI-Portal setzen: Arbeitsbereich
+        „Microsoft Fabric Capacity Metrics“ → Semantikmodell „Fabric Capacity Metrics“
+        → <b>Einstellungen → Datenquellen-Anmeldeinformationen → Anmelden</b>, mit einem
+        Konto, das <b>Kapazitätsadministrator</b> ist. Danach erscheinen die Zahlen hier
+        von selbst.`,
+      keine_daten: `Die Metrik-App ist angebunden, liefert für diese Berichte aber noch
+        keine Zeilen. Das ist direkt nach dem Einrichten normal – das Modell muss erst
+        aktualisiert werden.`,
       nicht_erreichbar: `Die Metrik-App war nicht erreichbar.`,
       abfrage_fehler: `Die Abfrage an das Metrikmodell wurde abgelehnt.`
     };

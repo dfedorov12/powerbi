@@ -113,12 +113,28 @@ const speicherAttrappe = {
   schreiben: async (regeln) => { ablage.regeln = regeln; return regeln; }
 };
 
+// Nutzungszählung und Metriken haben eigene Tests (nutzung.test.js); hier
+// interessiert nur, dass die Endpunkte sie richtig ansprechen.
+const gezaehlt = [];
+const nutzungAttrappe = {
+  zaehlen: async (key, upn, art) => { gezaehlt.push({ key, upn, art }); },
+  auswertung: async tage => ({
+    von: "2026-01-01", bis: "2026-01-30", aufbewahrungTage: 90, anonym: false, tage,
+    gesamt: { oeffnen: 0, erneuern: 0, personen: 0 }, jeBericht: [], jeTag: []
+  })
+};
+const metrikenAttrappe = {
+  verbrauch: async () => ({ verfuegbar: false, grund: "nicht_eingerichtet" })
+};
+
 const echtesLaden = Module._load;
 Module._load = function (anfrage, ...rest) {
   if (anfrage === "@azure/functions") {
     return { app: { http: (name, opt) => registriert.set(opt.route || name, opt) } };
   }
   if (anfrage === "../lib/speicher") return speicherAttrappe;
+  if (anfrage === "../lib/nutzung") return nutzungAttrappe;
+  if (anfrage === "../lib/metriken") return metrikenAttrappe;
   return echtesLaden.call(this, anfrage, ...rest);
 };
 require("../src/functions/api");
@@ -141,7 +157,9 @@ function ruf(route, { method = "GET", ausweis = null,
 
 const GRUPPE = "8f14e45f-ceea-467a-9b2c-6f0e2c1a3b4d";
 
-test.beforeEach(() => { pbiFehler = null; aufrufe.length = 0; ablage.regeln = []; });
+test.beforeEach(() => {
+  pbiFehler = null; aufrufe.length = 0; ablage.regeln = []; gezaehlt.length = 0;
+});
 
 /* ── health ──────────────────────────────────────────────────────────── */
 
@@ -191,6 +209,8 @@ test("Ausweis für einen anderen Dienst wird abgewiesen", async () => {
 test("gültiger Ausweis bekommt ein Einbettungs-Token", async () => {
   const r = await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
   assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(gezaehlt, [{ key: "bericht1", upn: "denis@dihag.com", art: "oeffnen" }],
+    "die Öffnung muss gezählt werden");
   assert.strictEqual(r.jsonBody.token, "einbettungs-token");
   assert.strictEqual(r.jsonBody.reportId, RID);
   assert.ok(r.jsonBody.embedUrl.startsWith("https://app.powerbi.com/"));
@@ -370,4 +390,39 @@ test("PUT ohne Regelliste wird abgewiesen", async () => {
   });
   assert.strictEqual(r.status, 400);
   assert.strictEqual(r.jsonBody.art, "eingabe");
+});
+
+/* ── Verbrauch ───────────────────────────────────────────────────────── */
+
+test("die Verbrauchszahlen sind Administratoren vorbehalten", async () => {
+  const r = await ruf("nutzung", { ausweis: token() });   // denis, kein Admin
+  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.jsonBody.art, "kein_admin");
+});
+
+test("ohne Ausweis gibt es keine Verbrauchszahlen", async () => {
+  const r = await ruf("nutzung");
+  assert.strictEqual(r.status, 401);
+});
+
+test("ein Administrator laut Regel darf den Verbrauch sehen", async () => {
+  ablage.regeln = [{ id: "r1", typ: "domaene", wert: "dihag.com",
+                     berichte: ["*"], admin: true, aktiv: true, name: "", notiz: "" }];
+  const r = await ruf("nutzung", { ausweis: token() });
+  assert.strictEqual(r.status, 200);
+  assert.ok(r.jsonBody.zaehlung, "die Zaehlung muss mitkommen");
+  assert.ok("verfuegbar" in r.jsonBody.cu, "der CU-Zustand muss mitkommen");
+});
+
+test("eine Token-Erneuerung wird als solche gezählt, nicht als neue Öffnung", async () => {
+  await ruf("embed-token", {
+    ausweis: token(), query: { bericht: "bericht1", grund: "erneuerung" }
+  });
+  assert.deepStrictEqual(gezaehlt.map(g => g.art), ["erneuern"]);
+});
+
+test("abgewiesene Aufrufe werden nicht gezählt", async () => {
+  await ruf("embed-token", { query: { bericht: "bericht1" } });              // ohne Ausweis
+  await ruf("embed-token", { ausweis: token(), query: { bericht: "weg" } }); // unbekannt
+  assert.deepStrictEqual(gezaehlt, [], "nur ausgegebene Token zählen");
 });
