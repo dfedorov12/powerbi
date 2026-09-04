@@ -33,9 +33,13 @@ Rechte des Dienstusers – bewusst die kleinste Stufe, beides nachgemessen:
 |---|---|---|
 | `DEV_Reporting_Central` | **Viewer** | der Bericht |
 | `DEV_Semantic_Models_Central` | **Viewer** | das Semantikmodell dahinter |
+| `DEV_Data_Engineering_Central` | **Viewer** | das Lakehouse `lh_gold`, aus dem das Modell liest |
 
-*Viewer* genügt in beiden Fällen – Microsoft dokumentiert *Member*, geprüft ist
-die niedrigere Stufe.
+*Viewer* genügt überall – Microsoft dokumentiert *Member*, geprüft ist die
+niedrigere Stufe. Alle drei Stufen sind nötig, weil die Kette
+Bericht → Semantikmodell → Lakehouse über drei Arbeitsbereiche läuft und das
+Direct-Lake-Modell per SSO mit der Identität des Dienstusers auf die Daten
+zugreift.
 
 ## Warum es zwei Teile gibt
 
@@ -224,5 +228,6 @@ ausgestellt wird ausschließlich `accessLevel: View`.
 | `PowerBINotAuthorizedException` beim GET | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
 | `PowerBINotAuthorizedException` nur bei `GenerateToken` | Das **Semantikmodell liegt in einem anderen Arbeitsbereich** (`datasetWorkspaceId` im Bericht prüfen). Der Dienstuser braucht auch dort Zugriff – die Dataset-Rechte-API nimmt keine Dienstprinzipale, es muss über die Arbeitsbereichsrolle gehen |
 | `Embedding a DirectLake dataset is not supported with V1 embed token` | Der berichtsbezogene Endpunkt `/groups/…/reports/…/GenerateToken` kann keine Direct-Lake-Modelle. Der Broker nimmt deshalb den mandantenweiten `/GenerateToken` mit `datasets` + `reports` |
+| Bericht wird angezeigt, aber „Es konnte keine Verbindung mit der Datenquelle … hergestellt werden" | Das Direct-Lake-Modell greift per SSO mit der Identität des Dienstusers auf das Lakehouse durch. Der braucht deshalb auch im **Arbeitsbereich des Lakehouse** die Rolle *Viewer*. Die Adresse im Fehlertext (`…datawarehouse.fabric.microsoft.com`, `database`) nennt die Element-Id – über die Fabric-Admin-API findet man Arbeitsbereich und Namen |
 | Bericht bleibt leer, Konsole meldet CORS | Die **Plattform-CORS-Liste** der Function App ist leer oder unvollständig – der Host beantwortet `OPTIONS` selbst und lässt die Vorabfrage nicht zum Code durch. Beide Stellen pflegen: Plattformliste **und** `ALLOWED_ORIGINS`; die Liste greift erst nach einem Neustart |
 | „Free trial version" im Bericht | Arbeitsbereich liegt auf keiner Kapazität |

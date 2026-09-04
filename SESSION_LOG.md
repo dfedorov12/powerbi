@@ -263,3 +263,28 @@ startet die App neu. Kommentare in `api.js` und beide READMEs entsprechend.
 Einbettungs-Token (1901 Zeichen), `Access-Control-Allow-Origin` korrekt;
 unbekannter Schluessel 404, ohne Ausweis 401. Vorautorisierung der Azure CLI
 wieder entfernt (nachgeprueft).
+
+**Nachtrag 2 – die Kette geht ueber DREI Arbeitsbereiche:**
+Nach dem erfolgreichen Einbetten meldete der Bericht im Browser
+*„Es konnte keine Verbindung mit der Datenquelle … hergestellt werden"* mit
+einer TDS-Adresse auf `…datawarehouse.fabric.microsoft.com`. Ursache: Das
+Direct-Lake-Modell greift **per SSO mit der Identitaet des Dienstusers** auf die
+Daten durch. Ueber die Fabric-Admin-API liess sich die Element-Id aufloesen:
+SQL-Endpunkt des Lakehouse **`lh_gold`** im Arbeitsbereich
+**`DEV_Data_Engineering_Central`** (`15c16a40-…`) – ein *dritter* Arbeitsbereich.
+Dort ebenfalls *Viewer* erteilt (Praezedenzfall war vorhanden: der
+`MSFabricConnector Service User Dev` steht dort als Contributor).
+
+Die Kette lautet damit: **Bericht → Semantikmodell → Lakehouse**, jeweils in
+einem eigenen Arbeitsbereich, ueberall Rolle *Viewer*.
+
+**Nachgewiesen durch echtes Rendern**, nicht nur durch den Token: temporaere
+Seite `_test-embed.html` (gitignore) auf localhost:8774 mit frischem
+Einbettungs-Token, powerbi-client, Ereignisprotokoll. Ergebnis: `loaded`,
+`rendered`, **kein** `error` – und im Bild die vollstaendig gefuellte Tabelle.
+Testseite und zwischengespeicherte Token danach geloescht, Vorautorisierung der
+Azure CLI entfernt (alles nachgeprueft).
+
+**Auf Wunsch von Denis:** Fussleiste entschlackt – „nur Ansicht", der Verweis
+auf „Rund um den Job" und „Support" sind raus, es bleibt
+„DIHAG Foundry Group · Berichte aus Power BI".
