@@ -222,7 +222,9 @@ const NUTZUNG_UI = (() => {
           Kostenanalyse in Azure ↗</a>
       </div>
       <p class="hinweis">Tatsächliche Azure-Kosten der Ressourcengruppen dieser Anwendung,
-        Stand ${esc(new Date(k.stand).toLocaleString("de-DE"))}.</p>
+        Stand ${esc(new Date(k.stand).toLocaleString("de-DE"))}.
+        ${k.veraltet ? `<b>Azure drosselt die Abfrage gerade</b> – das ist der zuletzt
+          abgerufene Stand, nicht der aktuelle.` : ""}</p>
 
       <div class="kacheln">
         <div class="kachel"><b>${geld(m.summe, w)}</b><span>laufender Monat</span></div>

@@ -519,8 +519,9 @@ Statt weiter an CU-Zahlen zu ziehen, die diese Installation nicht hergibt: die
 **echten Kosten** aus Azure Cost Management. Die API antwortet zuverlaessig.
 
 - `broker/src/lib/kosten.js`: `client_credentials` fuer
-  `management.azure.com`, Abfrage `MonthToDate` und `TheLastMonth`, gruppiert
-  nach Ressourcengruppe, gefiltert auf die eigenen; Aufteilung in
+  `management.azure.com`, **eine** Abfrage ueber beide Monate (Custom-Zeitraum
+  ab dem Ersten des Vormonats, `granularity: "Monthly"`), gruppiert nach
+  Ressourcengruppe, gefiltert auf die eigenen; Aufteilung in
   „Fabric-Kapazitaet" und „uebrige".
 - Endpunkt `GET /api/kosten` (nur Administratoren), eine Stunde zwischengespeichert.
 - Rolle **Cost Management Reader** fuer den Dienstuser auf dem Abonnement erteilt.
@@ -528,13 +529,18 @@ Statt weiter an CU-Zahlen zu ziehen, die diese Installation nicht hergibt: die
   Vormonat, Aufteilung je Ressourcengruppe und Verweis in die Kostenanalyse.
 
 **Zwei Eigenheiten, die Arbeit gemacht haben:**
-1. Cost Management **drosselt** hart. Mein erster Entwurf fragte beide
-   Zeitraeume **parallel** ab und trat damit sofort ins Limit. Jetzt
-   nacheinander, mit `Retry-After` und wachsender Wartezeit.
+1. Cost Management **drosselt** viel haerter als gedacht. Erster Entwurf: beide
+   Zeitraeume **parallel** – sofort im Limit. Zweiter Entwurf: nacheinander mit
+   Wiederholungsleiter – gemessen am 04.09.2026 trotzdem 429, bei **acht
+   Sekunden** Abstand. Keine Wartezeit holt das zuverlaessig ein, also: **eine
+   einzige Abfrage** fuer beide Monate. Und wenn die gedrosselt wird, liefert
+   der Broker den zuletzt bekannten Stand mit sichtbarem Zeitpunkt statt einer
+   Fehlermeldung.
 2. Ein **429 ist eine gute Nachricht**: Azure drosselt nur authentifizierte und
-   autorisierte Aufrufe. Bei fehlender Rolle kaeme 403. Der Zugriff des
-   Dienstusers ist damit belegt, auch wenn die Live-Abfrage waehrend des
-   Testens im Limit haengen blieb.
+   autorisierte Aufrufe. Bei fehlender Rolle kaeme 403. Direkt als Dienstuser
+   nachgemessen: `MonthToDate` = HTTP 200 mit `rg-dihag-dp-dev-westeurope`
+   49,78 EUR und `rg-berichte-broker` 0,00 EUR. Der Zugriff steht also; das
+   Ratenlimit war rein selbst verursacht durch das viele Testen.
 
 **Inhaltlich wichtig – und in der Oberflaeche so gesagt:** Eine Oeffnung kostet
 **nichts extra**. Die Kapazitaet wird pro Stunde bezahlt, nicht pro Aufruf. Die

@@ -267,11 +267,14 @@ Die ausgewiesene Zahl „je Aufruf" ist deshalb ausdrücklich eine **Vollkosten*
 Rechnung (Monatskosten ÷ Aufrufe), keine Grenzkosten; sie sinkt mit jeder
 weiteren Nutzung.
 
-> Cost Management **drosselt** spürbar (HTTP 429). Der Broker wiederholt mit
-> wachsender Wartezeit, beachtet `Retry-After`, fragt die beiden Zeiträume
-> **nacheinander** ab (parallel tritt sofort ins Limit) und hält das Ergebnis
-> eine Stunde vor. Bei anhaltender Drosselung sagt die Ansicht das – und
-> verweist ins Portal, das sofort antwortet.
+> Cost Management **drosselt hart** (HTTP 429) – am 04.09.2026 nachgemessen:
+> zwei Abfragen mit acht Sekunden Abstand, die zweite abgelehnt. Deshalb stellt
+> der Broker **eine einzige Abfrage** für beide Monate (Custom-Zeitraum mit
+> Monatsgranularität) statt einer je Zeitraum, wiederholt mit wachsender
+> Wartezeit, beachtet `Retry-After` und hält das Ergebnis eine Stunde vor. Wird
+> trotzdem gedrosselt, zeigt die Ansicht den **zuletzt abgerufenen Stand** und
+> schreibt dazu, dass er nicht aktuell ist; die Kostenanalyse im Portal
+> antwortet sofort.
 
 ### Was gespeichert wird
 
