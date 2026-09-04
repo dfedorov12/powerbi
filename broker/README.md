@@ -43,9 +43,14 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 | `ERLAUBTE_DOMAENEN` | `dihag.com` | optional: nur diese E-Mail-Domänen |
 | `ADMIN_UPNS` | `administrator@dihag.com` | wer `/api/berichte` sehen darf |
 
-> Die Einstellung **CORS** der Function App im Portal muss **leer** bleiben –
-> der Broker setzt die Kopfzeilen selbst, sonst kämen sie doppelt und der
-> Browser lehnt die Antwort ab.
+> **CORS steht an zwei Stellen, beide werden gebraucht.** Die
+> **Plattform-CORS-Liste** der Function App muss die Adressen des Frontends
+> enthalten: Der Functions-Host beantwortet `OPTIONS` selbst und lässt die
+> Vorabfrage nicht bis zum Code durch – ist seine Liste leer, antwortet er
+> 204 ohne Kopfzeilen und der Browser bricht ab, bevor die eigentliche
+> Anfrage gestellt wird. `ALLOWED_ORIGINS` gilt für die echten Antworten.
+> Doppelte Kopfzeilen entstehen dabei nicht (nachgemessen). Die Liste greift
+> erst **nach einem Neustart** der App.
 
 Das Geheimnis lässt sich später durch ein Zertifikat oder eine verwaltete
 Identität ersetzen; Microsoft empfiehlt das für den Dauerbetrieb.

@@ -16,7 +16,7 @@ ausgestellt, und der Dienstuser hat in beiden Arbeitsbereichen nur die Rolle
 
 | | |
 |---|---|
-| Frontend | https://dfedorov12.github.io/powerbi/ |
+| Frontend | **https://powerbi.dihag.de/** (eigene Domäne, HTTPS erzwungen) · github.io/powerbi leitet dorthin |
 | Broker | https://berichte-token-broker.azurewebsites.net/api · `/health` meldet `eingerichtet: true` |
 | Azure | Abonnement `sub-dihag-dp-global`, Ressourcengruppe `rg-berichte-broker`, westeurope, Flex-Verbrauchsplan, Node 24 |
 | Frontend-Registrierung | `Berichte-Frontend` · `5813fded-4258-4736-8a7a-6bcc2b76325b` |
@@ -224,5 +224,5 @@ ausgestellt wird ausschließlich `accessLevel: View`.
 | `PowerBINotAuthorizedException` beim GET | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
 | `PowerBINotAuthorizedException` nur bei `GenerateToken` | Das **Semantikmodell liegt in einem anderen Arbeitsbereich** (`datasetWorkspaceId` im Bericht prüfen). Der Dienstuser braucht auch dort Zugriff – die Dataset-Rechte-API nimmt keine Dienstprinzipale, es muss über die Arbeitsbereichsrolle gehen |
 | `Embedding a DirectLake dataset is not supported with V1 embed token` | Der berichtsbezogene Endpunkt `/groups/…/reports/…/GenerateToken` kann keine Direct-Lake-Modelle. Der Broker nimmt deshalb den mandantenweiten `/GenerateToken` mit `datasets` + `reports` |
-| Bericht bleibt leer, Konsole meldet CORS | `ALLOWED_ORIGINS` falsch, oder die CORS-Liste der Function App im Portal ist nicht leer |
+| Bericht bleibt leer, Konsole meldet CORS | Die **Plattform-CORS-Liste** der Function App ist leer oder unvollständig – der Host beantwortet `OPTIONS` selbst und lässt die Vorabfrage nicht zum Code durch. Beide Stellen pflegen: Plattformliste **und** `ALLOWED_ORIGINS`; die Liste greift erst nach einem Neustart |
 | „Free trial version" im Bericht | Arbeitsbereich liegt auf keiner Kapazität |

@@ -234,3 +234,32 @@ funktioniert nicht mehr, deshalb `node --test test/*.test.js` im Testskript.
 
 **Stand:** 26 Broker-Tests und 8 Sichtbarkeitstests gruen, Broker liefert echte
 Token. Offen bleibt nur die OIDC-Identitaet fuer das automatische Deployen.
+
+**Nachtrag am selben Tag – eigene Domaene und CORS:**
+Denis hat waehrenddessen per GitHub-Oberflaeche eine `CNAME` fuer
+**powerbi.dihag.de** angelegt. Nachgezogen: Redirect-URI in der
+Frontend-Registrierung (sonst AADSTS50011, weil `auth.js` die Adresse aus dem
+Aufruf ableitet) und `ALLOWED_ORIGINS` im Broker.
+
+Dabei kam eine **falsche Annahme aus (1) ans Licht**: Dort stand, die
+Plattform-CORS-Liste der Function App muesse leer bleiben, sonst gaebe es
+doppelte Kopfzeilen. Gemessen stimmt das Gegenteil:
+
+- Der Functions-Host beantwortet `OPTIONS` **selbst**; die Vorabfrage erreicht
+  den Code nie. Ist seine Liste leer, antwortet er `204` voellig ohne
+  Kopfzeilen – der Browser bricht ab, bevor die eigentliche Anfrage gestellt
+  wird. Genau das war reproduzierbar zu sehen: GET trug die Kopfzeilen
+  (aus dem Code), OPTIONS gar keine.
+- Mit gefuellter Plattformliste **doppelt sich nichts**: die Plattform setzt die
+  Kopfzeilen nur auf der Vorabfrage, der Code nur auf den uebrigen Antworten
+  (nachgezaehlt: genau ein `Access-Control-Allow-Origin`).
+- Die Liste greift erst **nach einem Neustart** der App.
+
+`setup-broker.ps1` haette die Liste geleert und damit jede neu aufgebaute
+Instanz unbrauchbar gemacht – korrigiert: es setzt die Herkuenfte jetzt und
+startet die App neu. Kommentare in `api.js` und beide READMEs entsprechend.
+
+**Abschlusstest von https://powerbi.dihag.de aus:** HTTP 200 mit
+Einbettungs-Token (1901 Zeichen), `Access-Control-Allow-Origin` korrekt;
+unbekannter Schluessel 404, ohne Ausweis 401. Vorautorisierung der Azure CLI
+wieder entfernt (nachgeprueft).

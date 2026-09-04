@@ -148,20 +148,27 @@ try {
     [System.GC]::Collect()
 }
 
-# ── Plattform-CORS leeren ─────────────────────────────────────────────
-Write-Host "`n[5] CORS-Liste der Plattform leeren" -ForegroundColor Yellow
+# ── Plattform-CORS setzen ─────────────────────────────────────────────
+#  Der Functions-Host beantwortet OPTIONS selbst und laesst die Vorabfrage
+#  nicht bis zum Code durch. Ist seine Liste leer, antwortet er 204 ohne
+#  Kopfzeilen - der Browser bricht dann ab, bevor die eigentliche Anfrage
+#  ueberhaupt gestellt wird. Die Kopfzeilen doppeln sich nicht: die Plattform
+#  setzt sie nur auf der Vorabfrage, der Broker nur auf den uebrigen
+#  Antworten. Nachgemessen am 04.09.2026.
+Write-Host "`n[5] Plattform-CORS setzen" -ForegroundColor Yellow
+$herkuenfte = $Herkunft.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 $cors = (Az functionapp cors show --name $AppName --resource-group $Ressourcen) | ConvertFrom-Json
 $bestehende = @($cors.allowedOrigins)
-if ($bestehende.Count -eq 0) {
-    Write-Host "  bereits leer." -ForegroundColor Green
+$fehlend = $herkuenfte | Where-Object { $bestehende -notcontains $_ }
+if (-not $fehlend) {
+    Write-Host "  bereits vollstaendig: $($bestehende -join ', ')" -ForegroundColor Green
 } else {
-    foreach ($o in $bestehende) {
-        Az functionapp cors remove --name $AppName --resource-group $Ressourcen `
-            --allowed-origins $o | Out-Null
-    }
-    Write-Host "  entfernt: $($bestehende -join ', ')" -ForegroundColor Green
-    Write-Host "  (Der Broker setzt die CORS-Kopfzeilen selbst. Stehen sie doppelt,"
-    Write-Host "   lehnt der Browser die Antwort ab.)"
+    Az functionapp cors add --name $AppName --resource-group $Ressourcen `
+        --allowed-origins @fehlend | Out-Null
+    Write-Host "  ergaenzt: $($fehlend -join ', ')" -ForegroundColor Green
+    Write-Host "  Hinweis: die Liste greift erst nach einem Neustart der App."
+    Az functionapp restart --name $AppName --resource-group $Ressourcen | Out-Null
+    Write-Host "  App neu gestartet." -ForegroundColor Green
 }
 
 # ── Veroeffentlichungsprofil ──────────────────────────────────────────

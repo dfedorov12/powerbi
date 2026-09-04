@@ -43,9 +43,17 @@ function freigaben() {
 const liste = v => String(v || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
 /* ── CORS ─────────────────────────────────────────────────────────────
-   Die Function-App-Einstellung „CORS“ im Portal bleibt leer, sonst kämen
-   die Kopfzeilen doppelt. ALLOWED_ORIGINS enthält die Adressen des
-   Frontends, z. B. https://dfedorov12.github.io                         */
+   Zwei Stellen, und beide werden gebraucht – nachgemessen:
+
+   1. Die **Plattform-CORS-Liste** der Function App muss die Adressen des
+      Frontends enthalten. Der Functions-Host beantwortet `OPTIONS` selbst
+      und lässt die Vorabfrage gar nicht bis hierher durch; ist seine Liste
+      leer, antwortet er 204 ganz ohne Kopfzeilen und der Browser bricht ab,
+      bevor die eigentliche Anfrage überhaupt gestellt wird.
+   2. `ALLOWED_ORIGINS` hier, für die echten Antworten.
+
+   Die Kopfzeilen doppeln sich dabei nicht: die Plattform setzt sie nur auf
+   der Vorabfrage, dieser Code nur auf den übrigen Antworten.             */
 
 function corsKopf(request) {
   const erlaubt = liste(process.env.ALLOWED_ORIGINS);
