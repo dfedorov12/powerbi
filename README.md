@@ -6,8 +6,9 @@ stille Anmeldung über Entra ID (PKCE, ohne MSAL), DIHAG Corporate Design,
 Sichtbarkeit nach Domäne und Rolle.
 
 **Nur Ansicht.** Niemand kann in der App etwas bearbeiten, speichern oder
-exportieren – das Einbettungs-Token wird ausschließlich mit `accessLevel: View`
-ausgestellt.
+exportieren – das Einbettungs-Token wird ausschließlich mit `allowEdit: false`
+ausgestellt, und der Dienstuser hat in beiden Arbeitsbereichen nur die Rolle
+*Viewer*.
 
 ---
 
@@ -23,10 +24,18 @@ ausgestellt.
 | Kapazität | `kapdihagdpwesteurope` (F4, aktiv) |
 | Bericht | „Aktuelle DIHAG Geschäftspartner" in `DEV_Reporting_Central` |
 
-**Offen:** Das Semantikmodell des Berichts liegt im Arbeitsbereich
-`DEV_Semantic_Models_Central`. Solange der Dienstuser dort keinen Zugriff hat,
-scheitert `GenerateToken` mit `PowerBINotAuthorizedException` – der Bericht
-selbst ist lesbar, das Modell dahinter nicht.
+**Ende zu Ende geprüft** (04.09.2026): Der Broker liefert für den Bericht ein
+echtes Einbettungs-Token.
+
+Rechte des Dienstusers – bewusst die kleinste Stufe, beides nachgemessen:
+
+| Arbeitsbereich | Rolle | wofür |
+|---|---|---|
+| `DEV_Reporting_Central` | **Viewer** | der Bericht |
+| `DEV_Semantic_Models_Central` | **Viewer** | das Semantikmodell dahinter |
+
+*Viewer* genügt in beiden Fällen – Microsoft dokumentiert *Member*, geprüft ist
+die niedrigere Stufe.
 
 ## Warum es zwei Teile gibt
 
@@ -93,8 +102,9 @@ Am Ende gibt es alle Werte für `js/config.js` und die Function App aus.
 1. **Administrationsportal → Mandanteneinstellungen → Entwicklereinstellungen**
    - *Dienstprinzipale dürfen Power-BI-APIs verwenden* → aktiv für die Gruppe `PowerBI-Einbettung`
    - *Inhalte in Apps einbetten* → aktiv
-2. **Arbeitsbereich → Zugriff verwalten**: den Dienstuser (oder die Gruppe) als
-   **Mitglied** eintragen.
+2. **Arbeitsbereich → Zugriff verwalten**: den Dienstuser als **Viewer**
+   eintragen – und zwar in **beiden** Arbeitsbereichen, falls das Semantikmodell
+   woanders liegt als der Bericht (`datasetWorkspaceId` des Berichts prüfen).
 3. **Arbeitsbereich → Einstellungen → Premium**: der **F4-Kapazität** zuweisen.
 4. Arbeitsbereichs- und Bericht-Id aus der Power-BI-Adresse ablesen:
    `app.powerbi.com/groups/<workspaceId>/reports/<reportId>/…`
@@ -192,7 +202,7 @@ ganzen Tag offenes Dashboard nicht stehen bleibt.
 
 ```bash
 node tests/test-sichtbarkeit.mjs
-node --test broker/test
+node --test broker/test/*.test.js
 ```
 
 8 Tests zur Sichtbarkeit, 26 zum Broker – ohne Netz, ohne Azure, ohne Mandanten.
@@ -213,5 +223,6 @@ ausgestellt wird ausschließlich `accessLevel: View`.
 | Broker meldet 404 | Der Schlüssel steht nicht in `PBI_BERICHTE` |
 | `PowerBINotAuthorizedException` beim GET | Dienstuser ist nicht Mitglied des Arbeitsbereichs, oder die Mandanteneinstellungen sind nicht aktiv |
 | `PowerBINotAuthorizedException` nur bei `GenerateToken` | Das **Semantikmodell liegt in einem anderen Arbeitsbereich** (`datasetWorkspaceId` im Bericht prüfen). Der Dienstuser braucht auch dort Zugriff – die Dataset-Rechte-API nimmt keine Dienstprinzipale, es muss über die Arbeitsbereichsrolle gehen |
+| `Embedding a DirectLake dataset is not supported with V1 embed token` | Der berichtsbezogene Endpunkt `/groups/…/reports/…/GenerateToken` kann keine Direct-Lake-Modelle. Der Broker nimmt deshalb den mandantenweiten `/GenerateToken` mit `datasets` + `reports` |
 | Bericht bleibt leer, Konsole meldet CORS | `ALLOWED_ORIGINS` falsch, oder die CORS-Liste der Function App im Portal ist nicht leer |
 | „Free trial version" im Bericht | Arbeitsbereich liegt auf keiner Kapazität |

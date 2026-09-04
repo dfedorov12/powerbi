@@ -6,7 +6,7 @@
   "engines": { "node": ">=18" },
   "scripts": {
     "start": "func start",
-    "test": "node --test test"
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@azure/functions": "^4.5.1"

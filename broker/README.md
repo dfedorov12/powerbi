@@ -14,7 +14,7 @@ Einbettungs-Token darf deshalb nur serverseitig entstehen.
 | Endpunkt | Anmeldung | Zweck |
 |---|---|---|
 | `GET /api/health` | keine | Lebenszeichen: ist alles konfiguriert? |
-| `GET /api/embed-token?bericht=<key>` | Entra-Token des Betrachters | Einbettungs-Token, `accessLevel: View` |
+| `GET /api/embed-token?bericht=<key>` | Entra-Token des Betrachters | Einbettungs-Token, nur lesend (`allowEdit: false`) |
 | `GET /api/berichte` | Entra-Token, UPN in `ADMIN_UPNS` | Was der Dienstuser sieht (Hilfe beim Einrichten) |
 
 Der Broker prüft jedes Aufrufer-Token vollständig selbst: Signatur gegen die
@@ -49,6 +49,19 @@ Im Portal unter *Function App → Einstellungen → Umgebungsvariablen*:
 
 Das Geheimnis lässt sich später durch ein Zertifikat oder eine verwaltete
 Identität ersetzen; Microsoft empfiehlt das für den Dauerbetrieb.
+
+### Warum der mandantenweite `GenerateToken`
+
+Der Broker ruft `POST /v1.0/myorg/GenerateToken` auf (V2) und nicht den
+berichtsbezogenen `POST /groups/…/reports/…/GenerateToken` (V1). Zwei Gründe:
+
+- **Direct-Lake-Modelle gehen mit V1 gar nicht** – Power BI antwortet mit
+  *„Embedding a DirectLake dataset is not supported with V1 embed token"*.
+- V2 nimmt Bericht und Semantikmodell getrennt entgegen und kommt damit auch
+  zurecht, wenn beide in verschiedenen Arbeitsbereichen liegen.
+
+Nur-Lesen ergibt sich dort aus `allowEdit: false`; `targetWorkspaces` wird
+bewusst weggelassen, das würde Schreibrechte verlangen.
 
 ---
 
@@ -104,15 +117,18 @@ zeigt `brokerUrl` für den örtlichen Test auf diese Adresse.
 npm test
 ```
 
+(Node 22+ nimmt kein Verzeichnis mehr entgegen, deshalb das Muster
+`node --test test/*.test.js` im Skript.)
+
 26 Tests, ohne Netz, ohne Azure, ohne Mandanten:
 
 - **Endpunkte** (`test/api.test.js`): `@azure/functions` und `fetch` sind
   Attrappen, die Handler laufen echt. Geprüft werden unter anderem: ohne
   Ausweis kein Token, fremde Zielgruppe abgewiesen, fremde Domäne abgewiesen,
   unbekannter Schlüssel abgewiesen, **untergeschobene `workspaceId`/`reportId`
-  im Aufruf ändern nichts**, ausgestellt wird ausschließlich
-  `accessLevel: View`, das Token des Dienstusers taucht in keiner Antwort auf,
-  CORS nur für erlaubte Herkunft.
+  im Aufruf ändern nichts**, angefordert wird der V2-Token mit
+  `allowEdit: false` und ohne `targetWorkspaces`, das Token des Dienstusers
+  taucht in keiner Antwort auf, CORS nur für erlaubte Herkunft.
 - **Ausweiskontrolle** (`test/entra.test.js`): gegen selbst erzeugte Schlüssel –
   fremd signiert, nachträglich verändert, `alg: none`, abgelaufen, fremder
   Mandant, fehlender Bereich.

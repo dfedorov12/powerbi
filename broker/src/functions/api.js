@@ -144,8 +144,11 @@ app.http("embedToken", {
       }
 
       const c = cfg();
+      // Der Bericht liefert embedUrl und die Id des Semantikmodells. Letztere
+      // braucht der V2-Token – das Modell kann in einem anderen Arbeitsbereich
+      // liegen als der Bericht.
       const b = await PBI.bericht(c, frei.workspaceId, frei.reportId);
-      const t = await PBI.einbettungsToken(c, frei.workspaceId, frei.reportId);
+      const t = await PBI.einbettungsToken(c, frei.workspaceId, frei.reportId, b.datasetId);
 
       context.log(`Einbettungs-Token für ${key} an ${wer.upn}`);
 

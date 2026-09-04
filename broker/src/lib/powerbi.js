@@ -72,11 +72,27 @@ async function pbi(cfg, pfad, opts = {}) {
 const bericht = (cfg, workspaceId, reportId) =>
   pbi(cfg, `/groups/${workspaceId}/reports/${reportId}`);
 
-/** Einbettungs-Token, ausschließlich lesend. */
-const einbettungsToken = (cfg, workspaceId, reportId) =>
-  pbi(cfg, `/groups/${workspaceId}/reports/${reportId}/GenerateToken`, {
+/** Einbettungs-Token, ausschließlich lesend.
+ *
+ *  Bewusst der mandantenweite Endpunkt `/GenerateToken` („V2“) statt des
+ *  berichtsbezogenen `/groups/…/reports/…/GenerateToken` („V1“):
+ *
+ *  - **Direct-Lake-Modelle gehen mit V1 gar nicht** – Power BI antwortet mit
+ *    „Embedding a DirectLake dataset is not supported with V1 embed token“.
+ *  - V2 nimmt Bericht und Semantikmodell getrennt entgegen und kommt damit
+ *    auch zurecht, wenn beide in verschiedenen Arbeitsbereichen liegen.
+ *
+ *  Nur-Lesen ergibt sich hier aus `allowEdit: false` (V2 kennt kein
+ *  `accessLevel`). `targetWorkspaces` wird absichtlich weggelassen – das ist
+ *  für „Bericht neu anlegen und speichern“ gedacht und würde Schreibrechte
+ *  verlangen. */
+const einbettungsToken = (cfg, workspaceId, reportId, datasetId) =>
+  pbi(cfg, "/GenerateToken", {
     method: "POST",
-    body: JSON.stringify({ accessLevel: "View" })
+    body: JSON.stringify({
+      datasets: [{ id: datasetId }],
+      reports: [{ id: reportId, allowEdit: false }]
+    })
   });
 
 /** Alle Arbeitsbereiche und Berichte, die der Dienstuser sieht –

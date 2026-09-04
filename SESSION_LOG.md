@@ -187,3 +187,50 @@ Workflow-Datei. Bis dahin: `az functionapp deployment source config-zip`.
 
 **Entscheidung Denis:** Zugriff auf `DEV_Semantic_Models_Central` wird erst mit
 Kutscher geklärt – der Arbeitsbereich bleibt unangetastet.
+
+## 2026-09-04 (4): Rechte erteilt, Direct Lake entlarvt, Ende zu Ende gruen
+
+**Denis:** „Gib ihm mal die Rechte und teste." (Damit ist die Entscheidung aus
+(3) – erst mit Kutscher klaeren – ueberholt.)
+
+**Vorgehen:** Direkte Arbeitsbereichsrolle statt Entra-Gruppe, weil
+Gruppenmitgliedschaften in Power BI bis zu einer Viertelstunde brauchen und
+der Test sofort belastbar sein sollte.
+
+**Erster Testlauf war ungueltig** – lehrreich genug fuer einen Eintrag: die
+Token-Beschaffung selbst scheiterte mit `AADSTS65001` (die Vorautorisierung der
+Azure CLI war noch nicht propagiert), also lief jeder Aufruf ohne Ausweis ins
+401. Das sah aus wie „Rolle reicht nicht", war aber ein Messfehler. Seitdem:
+erst Token holen und pruefen, dann testen.
+
+**Der eigentliche Befund:** Mit gueltigem Ausweis kam nicht mehr
+`PowerBINotAuthorizedException`, sondern
+
+> `Embedding a DirectLake dataset is not supported with V1 embed token`
+
+Das Semantikmodell ist ein **Direct-Lake-Modell**. Der berichtsbezogene
+Endpunkt (`/groups/…/reports/…/GenerateToken`, „V1") kann das grundsaetzlich
+nicht. Broker umgestellt auf den mandantenweiten **V2-Endpunkt**
+`POST /v1.0/myorg/GenerateToken` mit `datasets` + `reports`; Nur-Lesen ergibt
+sich dort aus `allowEdit: false` statt `accessLevel: View`. `targetWorkspaces`
+bleibt bewusst weg – das ist fuer „Bericht neu anlegen" und verlangt
+Schreibrechte. Nebenbei loest V2 auch den Fall „Modell in einem anderen
+Arbeitsbereich" sauber.
+
+**Ergebnis:** HTTP 200, Einbettungs-Token mit 1905 Zeichen fuer
+„Aktuelle DIHAG Geschaeftspartner", CORS-Kopf korrekt.
+
+**Rechte auf die kleinste Stufe zurueckgedreht und nachgemessen:**
+Microsoft dokumentiert *Member*; geprueft reicht in **beiden** Arbeitsbereichen
+**Viewer** – `DEV_Reporting_Central` und `DEV_Semantic_Models_Central`. Beide
+Male erst herabgestuft, dann getestet, nicht umgekehrt angenommen.
+
+**Aufgeraeumt:** Die temporaere Vorautorisierung der Azure CLI ist entfernt
+(nachgeprueft: nur die App selbst steht drin), das zwischengespeicherte
+Test-Token geloescht.
+
+**Nebenbefund:** Node ist hier inzwischen v24; `node --test <verzeichnis>`
+funktioniert nicht mehr, deshalb `node --test test/*.test.js` im Testskript.
+
+**Stand:** 26 Broker-Tests und 8 Sichtbarkeitstests gruen, Broker liefert echte
+Token. Offen bleibt nur die OIDC-Identitaet fuer das automatische Deployen.

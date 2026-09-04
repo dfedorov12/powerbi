@@ -23,6 +23,7 @@ const FRONTEND = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const KID = "testschluessel";
 const WS  = "ws-1111";
 const RID = "rep-2222";
+const DS  = "ds-3333";
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: "jwk" }), kid: KID, alg: "RS256", use: "sig" };
@@ -90,7 +91,7 @@ global.fetch = async (url, opts = {}) => {
     if (/\/reports\/[^/]+$/.test(s))
       return antwort({ id: RID, name: "Kennzahlen",
                        embedUrl: "https://app.powerbi.com/reportEmbed?reportId=" + RID,
-                       datasetId: "ds-3333" });
+                       datasetId: DS });
     if (s.endsWith("/reports"))
       return antwort({ value: [{ id: RID, name: "Kennzahlen" },
                                { id: "rep-4444", name: "Nicht freigegeben" }] });
@@ -180,11 +181,18 @@ test("gültiger Ausweis bekommt ein Einbettungs-Token", async () => {
   assert.ok(r.jsonBody.expiration);
 });
 
-test("ausgestellt wird ausschließlich accessLevel View", async () => {
+test("das Einbettungs-Token wird als V2-Token und nur lesend angefordert", async () => {
   await ruf("embed-token", { ausweis: token(), query: { bericht: "bericht1" } });
   const gen = aufrufe.find(a => a.url.endsWith("/GenerateToken"));
   assert.ok(gen, "GenerateToken wurde nicht aufgerufen");
-  assert.deepStrictEqual(JSON.parse(gen.body), { accessLevel: "View" });
+  // Mandantenweiter Endpunkt, nicht der berichtsbezogene: der kann keine
+  // Direct-Lake-Modelle ("not supported with V1 embed token").
+  assert.ok(!gen.url.includes("/reports/"), "V1-Endpunkt benutzt: " + gen.url);
+  const b = JSON.parse(gen.body);
+  assert.deepStrictEqual(b.datasets, [{ id: DS }]);
+  assert.deepStrictEqual(b.reports, [{ id: RID, allowEdit: false }]);
+  assert.ok(!("targetWorkspaces" in b),
+    "targetWorkspaces wuerde Schreibrechte verlangen und gehoert nicht hierher");
 });
 
 test("die Antwort enthält nicht das Token des Dienstusers", async () => {
@@ -207,8 +215,11 @@ test("untergeschobene IDs im Aufruf ändern nichts", async () => {
     query: { bericht: "bericht1", workspaceId: "fremd-ws", reportId: "fremd-rep" }
   });
   assert.strictEqual(r.status, 200);
-  assert.ok(aufrufe.every(a => a.url.includes(WS) && a.url.includes(RID)),
-    "es wurde ein fremder Bericht abgefragt: " + JSON.stringify(aufrufe));
+  const alles = JSON.stringify(aufrufe);
+  assert.ok(!alles.includes("fremd-ws") && !alles.includes("fremd-rep"),
+    "untergeschobene IDs sind bei Power BI angekommen: " + alles);
+  assert.ok(aufrufe.some(a => a.url.includes(WS) && a.url.includes(RID)),
+    "der freigegebene Bericht wurde nicht abgefragt: " + alles);
 });
 
 test("fremde E-Mail-Domäne wird abgewiesen", async () => {
